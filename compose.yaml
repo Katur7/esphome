@@ -1,0 +1,9 @@
+services:
+  esphome:
+    image: ghcr.io/esphome/esphome
+    network_mode: host
+    volumes:
+      - ./config:/config
+    stdin_open: true
+    tty: true
+    restart: "no"

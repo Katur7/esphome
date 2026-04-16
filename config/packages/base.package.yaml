@@ -1,0 +1,27 @@
+esp32:
+  board: ${board}
+  framework:
+    type: ${framework}
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: ${home_assistant_api_encryption_key}
+
+ota:
+  - platform: esphome
+    password: ${ota_password}
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Einkframe Fallback Hotspot"
+    password: !secret ap_password
+
+captive_portal:

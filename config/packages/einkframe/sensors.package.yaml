@@ -1,0 +1,101 @@
+# Get info from HA, as string format
+text_sensor:
+  - platform: homeassistant
+    entity_id: weather.smhi_home
+    id: myWeather
+    internal: true
+  - platform: homeassistant
+    entity_id: weather.smhi_home
+    id: myTemperature
+    attribute: "temperature"
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.current_date
+    id: current_date
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.expected_rain
+    id: expected_rain
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.openuv_current_uv_index
+    id: uv_index
+    internal: true
+  # Word of the day sensors
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day
+    id: myIcelandicWord
+    attribute: "fletta"
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_translations
+    id: word_translations
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_example_1_is
+    id: word_example1_is
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_example_1_se
+    id: word_example1_se
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_example_2_is
+    id: word_example2_is
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_example_2_se
+    id: word_example2_se
+    internal: true
+
+sensor:
+  - platform: adc
+    id: battery_adc
+    update_interval: never
+    pin: GPIO1
+    attenuation: 12db
+    samples: 5
+    entity_category: "diagnostic"
+    accuracy_decimals: 2
+    device_class: battery
+    unit_of_measurement: "V"
+    internal: true
+    filters:
+      - multiply: 2
+  - platform: template
+    id: battery_percent
+    name: "Battery Percentage"
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    update_interval: never
+    lambda: |-
+      float v = id(battery_adc).state;
+      if (v <= 0) return NAN;
+
+      // Clamp voltage (from empirical data Apr 2026)
+      if (v > 4.14) v = 4.14;
+      if (v < 3.09) v = 3.09;
+
+      // Piecewise lookup from measured discharge curve
+      if (v >= 4.13) return 100;
+      if (v >= 4.11) return 95;
+      if (v >= 4.08) return 90;
+      if (v >= 4.05) return 85;
+      if (v >= 4.02) return 80;
+      if (v >= 4.00) return 75;
+      if (v >= 3.98) return 70;
+      if (v >= 3.96) return 65;
+      if (v >= 3.93) return 60;
+      if (v >= 3.90) return 55;
+      if (v >= 3.87) return 50;
+      if (v >= 3.84) return 45;
+      if (v >= 3.80) return 40;
+      if (v >= 3.77) return 35;
+      if (v >= 3.72) return 30;
+      if (v >= 3.68) return 25;
+      if (v >= 3.64) return 20;
+      if (v >= 3.61) return 15;
+      if (v >= 3.56) return 10;
+      if (v >= 3.49) return 5;
+      return 0;

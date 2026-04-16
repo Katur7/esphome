@@ -1,0 +1,241 @@
+substitutions:
+  board: esp32-s3-devkitc-1
+  framework: arduino
+  home_assistant_api_encryption_key: !secret home_assistant_api_encryption_key
+  ota_password: !secret ota_password
+
+esphome:
+  name: einkframe
+  friendly_name: eInkFrame
+  includes:
+    - packages/einkframe/text_utils
+  # Run once at startup to make sure the display draws initial data
+  # even if update_interval: never
+  on_boot:
+    priority: -10  # run late, after HA connection is established
+    then:
+      - logger.log: "🚀 Boot complete, waiting for HA..."
+      - delay: 15s
+      - script.execute: refresh_display_cycle
+
+packages:
+  - !include packages/base.package.yaml
+  - !include packages/einkframe/sensors.package.yaml
+  - !include packages/einkframe/fonts.package.yaml
+
+switch:
+  - platform: gpio
+    pin: GPIO6
+    id: adc_enable
+    restore_mode: ALWAYS_OFF   # Start LOW to save power
+    name: "ADC Enable"
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    timezone: "Europe/Stockholm"
+    update_interval: 1h
+    on_time:
+      - seconds: 0
+        minutes: 0
+        hours: 6,11,13,15,18,21
+        then:
+          - script.execute: refresh_display_cycle
+
+script:
+  ######## Read battery ########
+  - id: read_battery_script
+    mode: single
+    then:
+      - switch.turn_on: adc_enable
+      - delay: 10ms
+      - component.update: battery_adc
+      - delay: 2s
+      - wait_until:
+          condition:
+            lambda: |-
+              return !isnan(id(battery_adc).state);
+          timeout: 10s
+      - switch.turn_off: adc_enable
+      - component.update: battery_percent
+      - wait_until:
+          condition:
+            lambda: |-
+              return !isnan(id(battery_percent).state);
+          timeout: 5s
+  ######## Wait for all sensors to be ready ########
+  - id: wait_for_all_sensors
+    mode: single
+    then:
+      - logger.log: "🔍 Waiting for battery and Home Assistant sensors..."
+      - wait_until:
+          condition:
+            lambda: |-
+              return (
+                !isnan(id(battery_adc).state) &&
+                !isnan(id(battery_percent).state) &&
+                !id(myWeather).state.empty() &&
+                !id(myTemperature).state.empty() &&
+                !id(current_date).state.empty() &&
+                !id(myIcelandicWord).state.empty() &&
+                !id(word_translations).state.empty() &&
+                !id(word_example1_is).state.empty() &&
+                !id(word_example1_se).state.empty() &&
+                !id(word_example2_is).state.empty() &&
+                !id(word_example2_se).state.empty() &&
+                !id(expected_rain).state.empty() &&
+                !id(uv_index).state.empty()
+              );
+          timeout: 60s
+      - logger.log: "✅ All sensors ready!"
+  ######## Main display refresh cycle ########
+  - id: refresh_display_cycle
+    mode: single
+    then:
+      - logger.log: "⏳ Starting refresh cycle..."
+      - script.execute: read_battery_script
+      - script.wait: read_battery_script
+      - script.execute: wait_for_all_sensors
+      - script.wait: wait_for_all_sensors
+      - logger.log: "🖼️ Updating e-ink display..."
+      - component.update: eink_display
+      - logger.log: "✅ Display refresh done!"
+
+# Display info via SPI
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO9
+
+display:
+  - platform: waveshare_epaper
+    model: 7.50inv2
+    id: eink_display
+    cs_pin: GPIO44
+    dc_pin: GPIO10
+    reset_pin: GPIO38
+    busy_pin: 
+      number: GPIO4
+      inverted: true
+    update_interval: never
+    lambda: |-
+      auto title_font = id(myFont);
+      auto subheading_font = id(subheaderFont);
+      auto normal_font = id(normalFont);
+      auto smaller_font = id(smallerFont);
+
+      auto weather = id(myWeather).state;
+      auto temperature = id(myTemperature).state;
+
+      auto icelandic_word = id(myIcelandicWord).state;
+      auto translations = id(word_translations).state;
+      auto example1_is = id(word_example1_is).state;
+      auto example1_se = id(word_example1_se).state;
+      auto example2_is = id(word_example2_is).state;
+      auto example2_se = id(word_example2_se).state;
+      float battery_voltage = id(battery_adc).state;
+
+
+      //print info in log
+      ESP_LOGD("epaper", "weather: %s", weather.c_str());
+      ESP_LOGD("epaper", "temperature: %s", temperature.c_str());
+      ESP_LOGD("epaper", "battery voltage: %.2f", battery_voltage);
+      ESP_LOGD("epaper", "expected rain: %s", id(expected_rain).state.c_str());
+      ESP_LOGD("epaper", "uv index: %s", id(uv_index).state.c_str());
+
+      // Draw lines to find screen edge
+      //it.line(55, 45, 55, 479);     // left side
+      //it.line(55, 45, 739, 45);     // top side
+      //it.line(739, 45, 739, 479);   // right side
+      //it.line(55, 479, 739, 479);   // bottom side
+      // Top-left corner = 55,45
+      // Top-right corner = 739,45
+      // Bottom-left corner = 55,479
+      // Bottom-right corner = 739,479
+
+      // Utils
+      std::map<std::string, std::string> icon_map { 
+        { "mdi-cloud-percent", "\U000F1A35" },
+        { "mdi-umbrella", "\U000F054A" },
+        { "mdi-sun-wireless-outline", "\U000F17FF" },
+        { "mdi-battery", "\U000F0079" }
+      };
+
+      // Title
+      it.printf(397, 60, title_font, TextAlign::TOP_CENTER, "%s", id(current_date).state.c_str());
+
+      // Weather
+      // Map weather states to MDI characters.
+      std::map<std::string, std::string> weather_state { 
+        { "clear-night", "\U000F0594" },
+        { "cloudy", "\U000F0590" },
+        { "exceptional", "\U000F05D6" },
+        { "fog", "\U000F0591" },                
+        { "hail", "\U000F0592" },               
+        { "lightning", "\U000F0593" },              
+        { "lightning-rainy", "\U000F067E" },                
+        { "partlycloudy", "\U000F0595"},                 
+        { "pouring", "\U000F0596" },  
+        { "rainy", "\U000F0597" },
+        { "snowy", "\U000F0598" },
+        { "snowy-rainy", "\U000F067F" },
+        { "sunny", "\U000F0599" },
+        { "windy", "\U000F059D" },
+        { "windy-variant", "\U000F059E" }
+      };
+      it.printf(100, 110, subheading_font, "Vädret idag");
+      it.printf(130, 160, id(font_mdi_medium), TextAlign::CENTER_RIGHT, weather_state[id(myWeather).state.c_str()].c_str());
+      it.printf(140, 160, normal_font, TextAlign::CENTER_LEFT, "%s ˚C", id(myTemperature).state.c_str());
+      
+      it.printf(130, 200, id(font_mdi_medium), TextAlign::CENTER_RIGHT, icon_map["mdi-cloud-percent"].c_str());
+      float rain_val = atof(id(expected_rain).state.c_str());
+      it.printf(140, 200, normal_font, TextAlign::CENTER_LEFT, "%.1f%%", rain_val);
+      int expected_rain_length = get_text_width(normal_font, id(expected_rain).state);
+      ESP_LOGD("epaper", "expected rain: %.1f%% %d", rain_val, expected_rain_length);
+      it.printf(140 + expected_rain_length + 40, 200, id(font_mdi_medium), TextAlign::CENTER_LEFT, icon_map["mdi-umbrella"].c_str());
+
+      it.printf(130, 250, id(font_mdi_medium), TextAlign::CENTER_RIGHT, icon_map["mdi-sun-wireless-outline"].c_str());
+      it.printf(140, 250, normal_font, TextAlign::CENTER_LEFT, "%.1f", atof(id(uv_index).state.c_str()));
+
+      it.printf(130, 300, id(font_mdi_medium), TextAlign::CENTER_RIGHT, icon_map["mdi-battery"].c_str());
+      it.printf(140, 300, normal_font, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_percent).state);
+
+      // Word of the day
+      it.printf(300, 110, subheading_font, "Dagens ord");
+      it.printf(300, 150, normal_font, "%s", id(myIcelandicWord).state.c_str());
+
+      std::string se_prefix = "  - ";
+      int translation_prefix_length = get_text_width(normal_font, se_prefix);
+      int current_line_y = 185;
+      std::vector<std::string> wrapped_translations = wrap_text(normal_font, translations, 400);
+      it.printf(300, current_line_y, normal_font, se_prefix.c_str());
+      for (const auto& line : wrapped_translations) {
+        it.printf(300 + translation_prefix_length, current_line_y, normal_font, "%s", line.c_str());
+        current_line_y += 25;
+      }
+      current_line_y += 15;   // Extra space after translations
+
+      int example_prefix_length = get_text_width(smaller_font, se_prefix);
+      std::vector<std::string> wrapped_example1_is = wrap_text(smaller_font, example1_is, 400);
+      for (const auto& line : wrapped_example1_is) {
+        it.printf(300, current_line_y, smaller_font, "%s", line.c_str());
+        current_line_y += 25;
+      }
+      std::vector<std::string> wrapped_example1_se = wrap_text(smaller_font, example1_se, 400);
+      it.printf(300, current_line_y, smaller_font, se_prefix.c_str());
+      for (const auto& line : wrapped_example1_se) {
+        it.printf(300 + example_prefix_length, current_line_y, smaller_font, "%s", line.c_str());
+        current_line_y += 25;
+      }
+      if (example2_is != "unknown") {
+        std::vector<std::string> wrapped_example2_is = wrap_text(smaller_font, example2_is, 400);
+        for (const auto& line : wrapped_example2_is) {
+          it.printf(300, current_line_y, smaller_font, "%s", line.c_str());
+          current_line_y += 25;
+        }
+        std::vector<std::string> wrapped_example2_se = wrap_text(smaller_font, example2_se, 400);
+        it.printf(300, current_line_y, smaller_font, se_prefix.c_str());
+        for (const auto& line : wrapped_example2_se) {
+          it.printf(300 + example_prefix_length, current_line_y, smaller_font, "%s", line.c_str());
+          current_line_y += 25;
+        }
+      }

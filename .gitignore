@@ -1,0 +1,4 @@
+config/.esphome/
+config/secrets.yaml
+
+TODO.txt
