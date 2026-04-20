@@ -12,14 +12,16 @@ ESPHome config project for an eInkFrame. See [specs/ARCHITECTURE.md](specs/ARCHI
 
 ## Commands
 
-ESPHome runs via Docker. All commands from repo root:
+ESPHome runs via Docker through Make targets:
 
 ```bash
-docker compose run --rm esphome compile config/einkframe.yaml   # Compile
-docker compose run --rm esphome upload config/einkframe.yaml    # Upload to device
-docker compose run --rm esphome logs config/einkframe.yaml      # Stream logs
-docker compose run --rm esphome run config/einkframe.yaml       # Compile + upload + logs
-docker compose run --rm esphome dashboard /config               # Web dashboard
+make compile    # Compile
+make upload     # Upload to device
+make logs       # Stream logs
+make run        # Compile + upload + logs
+make dashboard  # Web dashboard
+make validate   # Validate config
+make clean      # Clean build
 ```
 
 ## Workflow

@@ -24,7 +24,9 @@ config/
 
 - `einkframe.yaml` uses ESPHome `packages:` for modular YAML and `esphome.includes` for custom C++
 - Display rendering = single C++ lambda calling `text_utils` for measurement/wrapping
-- Refresh cycle: scripted sequence — enable ADC → read battery → wait for HA sensors → update display. Triggered on boot + time schedule
+- Refresh cycle: scripted sequence — enable ADC → read battery → wait for HA sensors → update display. Triggered on boot, then deep sleeps until next slot
+- Deep sleep schedule: 07, 11, 15, 19 (12h overnight gap). Sleep duration calculated dynamically to hit next slot
+- Dev Mode: HA-exposed switch disables deep sleep for OTA/development. When on, refreshes every 15 min. Default off. Reset button wakes from sleep
 
 ## Hardware
 

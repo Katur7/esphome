@@ -14,14 +14,19 @@ esphome:
   on_boot:
     priority: -10  # run late, after HA connection is established
     then:
-      - logger.log: "🚀 Boot complete, waiting for HA..."
+      - logger.log: "Boot complete, waiting for HA..."
       - delay: 15s
       - script.execute: refresh_display_cycle
+      - script.wait: refresh_display_cycle
+      - script.execute: enter_sleep
 
 packages:
   - !include packages/base.package.yaml
   - !include packages/einkframe/sensors.package.yaml
   - !include packages/einkframe/fonts.package.yaml
+
+deep_sleep:
+  id: deep_sleep_control
 
 switch:
   - platform: gpio
@@ -29,18 +34,29 @@ switch:
     id: adc_enable
     restore_mode: ALWAYS_OFF   # Start LOW to save power
     name: "ADC Enable"
+  - platform: template
+    name: "Dev Mode"
+    id: dev_mode
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - deep_sleep.prevent: deep_sleep_control
+    on_turn_off:
+      - deep_sleep.allow: deep_sleep_control
 
 time:
   - platform: homeassistant
     id: homeassistant_time
     timezone: "Europe/Stockholm"
-    update_interval: 1h
     on_time:
       - seconds: 0
-        minutes: 0
-        hours: 6,11,13,15,18,21
+        minutes: /15
         then:
-          - script.execute: refresh_display_cycle
+          - if:
+              condition:
+                switch.is_on: dev_mode
+              then:
+                - script.execute: refresh_display_cycle
 
 script:
   ######## Read battery ########
@@ -67,7 +83,7 @@ script:
   - id: wait_for_all_sensors
     mode: single
     then:
-      - logger.log: "🔍 Waiting for battery and Home Assistant sensors..."
+      - logger.log: "Waiting for battery and Home Assistant sensors..."
       - wait_until:
           condition:
             lambda: |-
@@ -87,19 +103,56 @@ script:
                 !id(uv_index).state.empty()
               );
           timeout: 60s
-      - logger.log: "✅ All sensors ready!"
+      - logger.log: "All sensors ready!"
   ######## Main display refresh cycle ########
   - id: refresh_display_cycle
     mode: single
     then:
-      - logger.log: "⏳ Starting refresh cycle..."
+      - logger.log: "Starting refresh cycle..."
       - script.execute: read_battery_script
       - script.wait: read_battery_script
       - script.execute: wait_for_all_sensors
       - script.wait: wait_for_all_sensors
-      - logger.log: "🖼️ Updating e-ink display..."
+      - logger.log: "Updating e-ink display..."
       - component.update: eink_display
-      - logger.log: "✅ Display refresh done!"
+      - logger.log: "Display refresh done!"
+  ######## Enter deep sleep if dev mode is off ########
+  - id: enter_sleep
+    mode: single
+    then:
+      - if:
+          condition:
+            switch.is_on: dev_mode
+          then:
+            - logger.log: "Dev mode ON — staying awake"
+          else:
+            - lambda: |-
+                // Wake schedule: 07, 11, 15, 19
+                const int slots[] = {7, 11, 15, 19};
+                const int num_slots = 4;
+
+                auto now = id(homeassistant_time).now();
+                int current_minutes = now.hour * 60 + now.minute;
+
+                // Find next slot
+                int sleep_minutes = 0;
+                for (int i = 0; i < num_slots; i++) {
+                  int slot_minutes = slots[i] * 60;
+                  if (slot_minutes > current_minutes) {
+                    sleep_minutes = slot_minutes - current_minutes;
+                    break;
+                  }
+                }
+                // If no slot found today, wrap to first slot tomorrow
+                if (sleep_minutes == 0) {
+                  sleep_minutes = (24 * 60 - current_minutes) + slots[0] * 60;
+                }
+
+                ESP_LOGI("sleep", "Sleeping for %d minutes (next wake at %02d:00)",
+                         sleep_minutes, (current_minutes + sleep_minutes) / 60 % 24);
+
+                id(deep_sleep_control).set_sleep_duration(sleep_minutes * 60 * 1000);
+            - deep_sleep.enter: deep_sleep_control
 
 # Display info via SPI
 spi:
