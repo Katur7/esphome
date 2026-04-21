@@ -70,32 +70,4 @@ sensor:
     state_class: measurement
     update_interval: never
     lambda: |-
-      float v = id(battery_adc).state;
-      if (v <= 0) return NAN;
-
-      // Clamp voltage (from empirical data Apr 2026)
-      if (v > 4.14) v = 4.14;
-      if (v < 3.09) v = 3.09;
-
-      // Piecewise lookup from measured discharge curve
-      if (v >= 4.13) return 100;
-      if (v >= 4.11) return 95;
-      if (v >= 4.08) return 90;
-      if (v >= 4.05) return 85;
-      if (v >= 4.02) return 80;
-      if (v >= 4.00) return 75;
-      if (v >= 3.98) return 70;
-      if (v >= 3.96) return 65;
-      if (v >= 3.93) return 60;
-      if (v >= 3.90) return 55;
-      if (v >= 3.87) return 50;
-      if (v >= 3.84) return 45;
-      if (v >= 3.80) return 40;
-      if (v >= 3.77) return 35;
-      if (v >= 3.72) return 30;
-      if (v >= 3.68) return 25;
-      if (v >= 3.64) return 20;
-      if (v >= 3.61) return 15;
-      if (v >= 3.56) return 10;
-      if (v >= 3.49) return 5;
-      return 0;
+      return voltage_to_battery_percent(id(battery_adc).state);

@@ -18,6 +18,12 @@ config/
       text_utils/                   # Custom C++ via esphome.includes
         text_utils.h
         text_utils.cpp
+      einkframe_utils/              # Pure logic extracted from YAML lambdas
+        einkframe_utils.h
+        einkframe_utils.cpp
+test/
+  doctest.h                         # Vendored single-header test framework
+  test_einkframe_utils.cpp          # Native unit tests (run via `make test`)
 ```
 
 ## How It Fits Together
@@ -37,6 +43,13 @@ Based on the [TRMNL 7.5" OG DIY Kit](https://www.seeedstudio.com/TRMNL-7-5-Inch-
 - **Battery**: 2000mAh Li-ion (3.0–4.2V nominal), ADC on GPIO1 with voltage divider (x2), gated by GPIO6
 - **Usable display area**: ~(55,45) to (739,479)
 
-## Custom C++ (text_utils)
+## Custom C++
 
-`get_text_width()` and `wrap_text()` use ESPHome's `font::Font::measure()`. Called from display lambda for dynamic positioning and word-wrapping. No separate build — ESPHome compiles them in. Signatures must match lambda usage.
+Two modules, both included via `esphome.includes`. No separate build — ESPHome compiles them into the firmware. Signatures must match lambda usage.
+
+- **text_utils** — `get_text_width()` and `wrap_text()` wrap ESPHome's `font::Font::measure()`. Called from the display lambda for dynamic positioning and word-wrapping. Tightly coupled to `esphome::font::Font`, so not unit-testable natively.
+- **einkframe_utils** — Pure functions extracted from YAML lambdas (no ESPHome deps). Currently: `minutes_to_next_slot(hour, minute)` for the deep-sleep schedule and `voltage_to_battery_percent(voltage)` for the calibrated battery curve. Add further extractable pure logic here.
+
+## Testing
+
+`make test` compiles [test/test_einkframe_utils.cpp](../test/test_einkframe_utils.cpp) natively with g++ (C++17) and runs the doctest suite. Only the `einkframe_utils` module is tested — `text_utils` and the display lambda depend on ESPHome headers and need hardware-in-the-loop testing.

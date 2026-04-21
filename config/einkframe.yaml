@@ -9,6 +9,7 @@ esphome:
   friendly_name: eInkFrame
   includes:
     - packages/einkframe/text_utils
+    - packages/einkframe/einkframe_utils
   # Run once at startup to make sure the display draws initial data
   # even if update_interval: never
   on_boot:
@@ -134,26 +135,9 @@ script:
             - logger.log: "Dev mode ON — staying awake"
           else:
             - lambda: |-
-                // Wake schedule: 07, 11, 15, 19
-                const int slots[] = {7, 11, 15, 19};
-                const int num_slots = 4;
-
                 auto now = id(homeassistant_time).now();
+                int sleep_minutes = minutes_to_next_slot(now.hour, now.minute);
                 int current_minutes = now.hour * 60 + now.minute;
-
-                // Find next slot
-                int sleep_minutes = 0;
-                for (int i = 0; i < num_slots; i++) {
-                  int slot_minutes = slots[i] * 60;
-                  if (slot_minutes > current_minutes) {
-                    sleep_minutes = slot_minutes - current_minutes;
-                    break;
-                  }
-                }
-                // If no slot found today, wrap to first slot tomorrow
-                if (sleep_minutes == 0) {
-                  sleep_minutes = (24 * 60 - current_minutes) + slots[0] * 60;
-                }
 
                 ESP_LOGI("sleep", "Sleeping for %d minutes (next wake at %02d:00)",
                          sleep_minutes, (current_minutes + sleep_minutes) / 60 % 24);
