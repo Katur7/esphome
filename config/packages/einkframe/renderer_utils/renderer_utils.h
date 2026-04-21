@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "esphome/components/display/display.h"
 #include "esphome/components/font/font.h"
@@ -17,13 +18,15 @@ struct InfoColumnState {
     float battery_percent;
 };
 
+struct ExamplePair {
+    std::string is;
+    std::string se;
+};
+
 struct WordOfDayState {
     std::string word;
     std::string translations;
-    std::string example1_is;
-    std::string example1_se;
-    std::string example2_is;
-    std::string example2_se;
+    std::vector<ExamplePair> examples;
 };
 
 void draw_title(esphome::display::Display &it,

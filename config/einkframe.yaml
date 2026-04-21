@@ -181,11 +181,16 @@ display:
         id(battery_percent).state,
       });
 
+      std::vector<ExamplePair> examples;
+      if (id(word_example1_is).state != "unknown") {
+        examples.push_back({id(word_example1_is).state, id(word_example1_se).state});
+      }
+      if (id(word_example2_is).state != "unknown") {
+        examples.push_back({id(word_example2_is).state, id(word_example2_se).state});
+      }
+
       draw_word_of_day(it, id(subheaderFont), id(normalFont), id(smallerFont), WordOfDayState{
         id(myIcelandicWord).state,
         id(word_translations).state,
-        id(word_example1_is).state,
-        id(word_example1_se).state,
-        id(word_example2_is).state,
-        id(word_example2_se).state,
+        examples,
       });
