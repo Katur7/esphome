@@ -10,6 +10,7 @@ esphome:
   includes:
     - packages/einkframe/text_utils
     - packages/einkframe/einkframe_utils
+    - packages/einkframe/renderer_utils
   # Run once at startup to make sure the display draws initial data
   # even if update_interval: never
   on_boot:
@@ -162,97 +163,29 @@ display:
       inverted: true
     update_interval: never
     lambda: |-
-      auto title_font = id(myFont);
-      auto subheading_font = id(subheaderFont);
-      auto normal_font = id(normalFont);
-      auto smaller_font = id(smallerFont);
-
-      auto weather = id(myWeather).state;
-      auto temperature = id(myTemperature).state;
-
-      auto icelandic_word = id(myIcelandicWord).state;
-      auto translations = id(word_translations).state;
-      auto example1_is = id(word_example1_is).state;
-      auto example1_se = id(word_example1_se).state;
-      auto example2_is = id(word_example2_is).state;
-      auto example2_se = id(word_example2_se).state;
-      float battery_voltage = id(battery_adc).state;
-
-      //print info in log
-      ESP_LOGD("epaper", "weather: %s", weather.c_str());
-      ESP_LOGD("epaper", "temperature: %s", temperature.c_str());
-      ESP_LOGD("epaper", "battery voltage: %.2f", battery_voltage);
+      ESP_LOGD("epaper", "weather: %s", id(myWeather).state.c_str());
+      ESP_LOGD("epaper", "temperature: %s", id(myTemperature).state.c_str());
+      ESP_LOGD("epaper", "battery voltage: %.2f", id(battery_adc).state);
       ESP_LOGD("epaper", "expected rain: %s", id(expected_rain).state.c_str());
       ESP_LOGD("epaper", "uv index: %s", id(uv_index).state.c_str());
 
-      // Draw lines to find screen edge
-      //it.line(55, 45, 55, 479);     // left side
-      //it.line(55, 45, 739, 45);     // top side
-      //it.line(739, 45, 739, 479);   // right side
-      //it.line(55, 479, 739, 479);   // bottom side
-      // Top-left corner = 55,45
-      // Top-right corner = 739,45
-      // Bottom-left corner = 55,479
-      // Bottom-right corner = 739,479
+      draw_title(it, id(myFont), TitleState{
+        id(current_date).state,
+      });
 
-      // Title
-      it.printf(397, 60, title_font, TextAlign::TOP_CENTER, "%s", id(current_date).state.c_str());
+      draw_info_column(it, id(subheaderFont), id(normalFont), id(font_mdi_medium), InfoColumnState{
+        id(myWeather).state,
+        id(myTemperature).state,
+        id(expected_rain).state,
+        id(uv_index).state,
+        id(battery_percent).state,
+      });
 
-      // Weather
-      it.printf(100, 110, subheading_font, "Vädret idag");
-      it.printf(130, 160, id(font_mdi_medium), TextAlign::CENTER_RIGHT, weather_icon(id(myWeather).state).c_str());
-      it.printf(140, 160, normal_font, TextAlign::CENTER_LEFT, "%s ˚C", id(myTemperature).state.c_str());
-
-      it.printf(130, 200, id(font_mdi_medium), TextAlign::CENTER_RIGHT, ui_icon("mdi-cloud-percent").c_str());
-      float rain_val = atof(id(expected_rain).state.c_str());
-      it.printf(140, 200, normal_font, TextAlign::CENTER_LEFT, "%.1f%%", rain_val);
-      int expected_rain_length = get_text_width(normal_font, id(expected_rain).state);
-      ESP_LOGD("epaper", "expected rain: %.1f%% %d", rain_val, expected_rain_length);
-      it.printf(140 + expected_rain_length + 40, 200, id(font_mdi_medium), TextAlign::CENTER_LEFT, ui_icon("mdi-umbrella").c_str());
-
-      it.printf(130, 250, id(font_mdi_medium), TextAlign::CENTER_RIGHT, ui_icon("mdi-sun-wireless-outline").c_str());
-      it.printf(140, 250, normal_font, TextAlign::CENTER_LEFT, "%.1f", atof(id(uv_index).state.c_str()));
-
-      it.printf(130, 300, id(font_mdi_medium), TextAlign::CENTER_RIGHT, ui_icon("mdi-battery").c_str());
-      it.printf(140, 300, normal_font, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_percent).state);
-
-      // Word of the day
-      it.printf(300, 110, subheading_font, "Dagens ord");
-      it.printf(300, 150, normal_font, "%s", id(myIcelandicWord).state.c_str());
-
-      std::string se_prefix = "  - ";
-      int translation_prefix_length = get_text_width(normal_font, se_prefix);
-      int current_line_y = 185;
-      std::vector<std::string> wrapped_translations = wrap_text(normal_font, translations, 400);
-      it.printf(300, current_line_y, normal_font, se_prefix.c_str());
-      for (const auto& line : wrapped_translations) {
-        it.printf(300 + translation_prefix_length, current_line_y, normal_font, "%s", line.c_str());
-        current_line_y += 25;
-      }
-      current_line_y += 15;   // Extra space after translations
-
-      int example_prefix_length = get_text_width(smaller_font, se_prefix);
-      std::vector<std::string> wrapped_example1_is = wrap_text(smaller_font, example1_is, 400);
-      for (const auto& line : wrapped_example1_is) {
-        it.printf(300, current_line_y, smaller_font, "%s", line.c_str());
-        current_line_y += 25;
-      }
-      std::vector<std::string> wrapped_example1_se = wrap_text(smaller_font, example1_se, 400);
-      it.printf(300, current_line_y, smaller_font, se_prefix.c_str());
-      for (const auto& line : wrapped_example1_se) {
-        it.printf(300 + example_prefix_length, current_line_y, smaller_font, "%s", line.c_str());
-        current_line_y += 25;
-      }
-      if (example2_is != "unknown") {
-        std::vector<std::string> wrapped_example2_is = wrap_text(smaller_font, example2_is, 400);
-        for (const auto& line : wrapped_example2_is) {
-          it.printf(300, current_line_y, smaller_font, "%s", line.c_str());
-          current_line_y += 25;
-        }
-        std::vector<std::string> wrapped_example2_se = wrap_text(smaller_font, example2_se, 400);
-        it.printf(300, current_line_y, smaller_font, se_prefix.c_str());
-        for (const auto& line : wrapped_example2_se) {
-          it.printf(300 + example_prefix_length, current_line_y, smaller_font, "%s", line.c_str());
-          current_line_y += 25;
-        }
-      }
+      draw_word_of_day(it, id(subheaderFont), id(normalFont), id(smallerFont), WordOfDayState{
+        id(myIcelandicWord).state,
+        id(word_translations).state,
+        id(word_example1_is).state,
+        id(word_example1_se).state,
+        id(word_example2_is).state,
+        id(word_example2_se).state,
+      });
