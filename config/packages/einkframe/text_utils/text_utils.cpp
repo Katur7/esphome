@@ -1,9 +1,9 @@
 #include <vector>
 #include <string>
-#include <sstream>
 
 
 #include "text_utils.h"
+#include "../einkframe_utils/einkframe_utils.h"
 #include "esphome/core/log.h"
 #include "esphome/components/font/font.h"
 
@@ -38,34 +38,10 @@ int get_text_width(esphome::font::Font *font, std::string text) {
 }
 
 std::vector<std::string> wrap_text(esphome::font::Font *font, std::string text, int max_width) {
-    std::vector<std::string> wrapped_lines = {};
-    std::string current_line;
-    if (font == nullptr || text.empty()) {
-        return wrapped_lines;
+    if (font == nullptr) {
+        return {};
     }
-
-
-    if (get_text_width(font, text) <= max_width) {
-        wrapped_lines.push_back(std::string(text));
-        return wrapped_lines;
-    }
-    std::istringstream iss(text);
-    std::string word;
-
-    while (iss >> word) {
-        std::string test_line = current_line.empty() ? word : current_line + " " + word;
-        int line_width = get_text_width(font, test_line.c_str());
-
-        if (line_width <= max_width) {
-            current_line = test_line;
-        } else {
-            wrapped_lines.push_back(current_line);
-            current_line = word;
-        }
-    }
-
-    if (!current_line.empty()) {
-        wrapped_lines.push_back(current_line);
-    }
-    return wrapped_lines;
+    return wrap_text_pure(text, max_width, [font](const std::string& s) {
+        return get_text_width(font, s);
+    });
 }

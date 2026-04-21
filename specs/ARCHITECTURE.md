@@ -47,9 +47,11 @@ Based on the [TRMNL 7.5" OG DIY Kit](https://www.seeedstudio.com/TRMNL-7-5-Inch-
 
 Two modules, both included via `esphome.includes`. No separate build — ESPHome compiles them into the firmware. Signatures must match lambda usage.
 
-- **text_utils** — `get_text_width()` and `wrap_text()` wrap ESPHome's `font::Font::measure()`. Called from the display lambda for dynamic positioning and word-wrapping. Tightly coupled to `esphome::font::Font`, so not unit-testable natively.
-- **einkframe_utils** — Pure functions extracted from YAML lambdas (no ESPHome deps). Currently: `minutes_to_next_slot(hour, minute)` for the deep-sleep schedule and `voltage_to_battery_percent(voltage)` for the calibrated battery curve. Add further extractable pure logic here.
+- **text_utils** — `get_text_width()` wraps ESPHome's `font::Font::measure()`. `wrap_text()` is now a thin adapter that forwards to `einkframe_utils::wrap_text_pure` with a Font-backed measurer, so the wrapping algorithm itself is unit-testable.
+- **einkframe_utils** — Pure functions (no ESPHome deps). Currently: `minutes_to_next_slot(hour, minute)`, `voltage_to_battery_percent(voltage)`, `weather_icon(state)` (HA weather state → MDI codepoint), `ui_icon(key)` (internal UI key → MDI codepoint), and `wrap_text_pure(text, max_width, measurer)` — the font-agnostic wrapping algorithm. Add further extractable pure logic here.
+
+Cross-module includes use relative paths (e.g. `text_utils` imports `../einkframe_utils/einkframe_utils.h`), because each `esphome.includes` directory is added to the compiler include path as its own root, not as a sibling set.
 
 ## Testing
 
-`make test` compiles [test/test_einkframe_utils.cpp](../test/test_einkframe_utils.cpp) natively with g++ (C++17) and runs the doctest suite. Only the `einkframe_utils` module is tested — `text_utils` and the display lambda depend on ESPHome headers and need hardware-in-the-loop testing.
+`make test` compiles [test/test_einkframe_utils.cpp](../test/test_einkframe_utils.cpp) natively with g++ (C++17) and runs the doctest suite. The `einkframe_utils` module is fully tested — including the wrapping algorithm via `wrap_text_pure` with a fake measurer. Only the `text_utils` Font adapter and the display lambda remain ESPHome-bound and need hardware-in-the-loop testing.

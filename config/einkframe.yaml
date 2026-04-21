@@ -195,51 +195,25 @@ display:
       // Bottom-left corner = 55,479
       // Bottom-right corner = 739,479
 
-      // Utils
-      std::map<std::string, std::string> icon_map { 
-        { "mdi-cloud-percent", "\U000F1A35" },
-        { "mdi-umbrella", "\U000F054A" },
-        { "mdi-sun-wireless-outline", "\U000F17FF" },
-        { "mdi-battery", "\U000F0079" }
-      };
-
       // Title
       it.printf(397, 60, title_font, TextAlign::TOP_CENTER, "%s", id(current_date).state.c_str());
 
       // Weather
-      // Map weather states to MDI characters.
-      std::map<std::string, std::string> weather_state { 
-        { "clear-night", "\U000F0594" },
-        { "cloudy", "\U000F0590" },
-        { "exceptional", "\U000F05D6" },
-        { "fog", "\U000F0591" },                
-        { "hail", "\U000F0592" },               
-        { "lightning", "\U000F0593" },              
-        { "lightning-rainy", "\U000F067E" },                
-        { "partlycloudy", "\U000F0595"},                 
-        { "pouring", "\U000F0596" },  
-        { "rainy", "\U000F0597" },
-        { "snowy", "\U000F0598" },
-        { "snowy-rainy", "\U000F067F" },
-        { "sunny", "\U000F0599" },
-        { "windy", "\U000F059D" },
-        { "windy-variant", "\U000F059E" }
-      };
       it.printf(100, 110, subheading_font, "Vädret idag");
-      it.printf(130, 160, id(font_mdi_medium), TextAlign::CENTER_RIGHT, weather_state[id(myWeather).state.c_str()].c_str());
+      it.printf(130, 160, id(font_mdi_medium), TextAlign::CENTER_RIGHT, weather_icon(id(myWeather).state).c_str());
       it.printf(140, 160, normal_font, TextAlign::CENTER_LEFT, "%s ˚C", id(myTemperature).state.c_str());
-      
-      it.printf(130, 200, id(font_mdi_medium), TextAlign::CENTER_RIGHT, icon_map["mdi-cloud-percent"].c_str());
+
+      it.printf(130, 200, id(font_mdi_medium), TextAlign::CENTER_RIGHT, ui_icon("mdi-cloud-percent").c_str());
       float rain_val = atof(id(expected_rain).state.c_str());
       it.printf(140, 200, normal_font, TextAlign::CENTER_LEFT, "%.1f%%", rain_val);
       int expected_rain_length = get_text_width(normal_font, id(expected_rain).state);
       ESP_LOGD("epaper", "expected rain: %.1f%% %d", rain_val, expected_rain_length);
-      it.printf(140 + expected_rain_length + 40, 200, id(font_mdi_medium), TextAlign::CENTER_LEFT, icon_map["mdi-umbrella"].c_str());
+      it.printf(140 + expected_rain_length + 40, 200, id(font_mdi_medium), TextAlign::CENTER_LEFT, ui_icon("mdi-umbrella").c_str());
 
-      it.printf(130, 250, id(font_mdi_medium), TextAlign::CENTER_RIGHT, icon_map["mdi-sun-wireless-outline"].c_str());
+      it.printf(130, 250, id(font_mdi_medium), TextAlign::CENTER_RIGHT, ui_icon("mdi-sun-wireless-outline").c_str());
       it.printf(140, 250, normal_font, TextAlign::CENTER_LEFT, "%.1f", atof(id(uv_index).state.c_str()));
 
-      it.printf(130, 300, id(font_mdi_medium), TextAlign::CENTER_RIGHT, icon_map["mdi-battery"].c_str());
+      it.printf(130, 300, id(font_mdi_medium), TextAlign::CENTER_RIGHT, ui_icon("mdi-battery").c_str());
       it.printf(140, 300, normal_font, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_percent).state);
 
       // Word of the day

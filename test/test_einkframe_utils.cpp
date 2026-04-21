@@ -2,6 +2,8 @@
 #include "doctest.h"
 
 #include <cmath>
+#include <string>
+#include <vector>
 
 #include "einkframe_utils.h"
 
@@ -62,4 +64,103 @@ TEST_CASE("voltage_to_battery_percent — invalid voltage returns NaN") {
 TEST_CASE("voltage_to_battery_percent — boundary values") {
     CHECK(voltage_to_battery_percent(3.09f) == 0.0f);   // lower clamp
     CHECK(voltage_to_battery_percent(4.14f) == 100.0f); // upper clamp
+}
+
+TEST_CASE("weather_icon — known states map to MDI codepoints") {
+    CHECK(weather_icon("sunny") == "\U000F0599");
+    CHECK(weather_icon("rainy") == "\U000F0597");
+    CHECK(weather_icon("partlycloudy") == "\U000F0595");
+    CHECK(weather_icon("snowy-rainy") == "\U000F067F");
+    CHECK(weather_icon("clear-night") == "\U000F0594");
+    CHECK(weather_icon("windy-variant") == "\U000F059E");
+}
+
+TEST_CASE("weather_icon — unknown state returns empty string") {
+    CHECK(weather_icon("not-a-real-state") == "");
+    CHECK(weather_icon("") == "");
+}
+
+TEST_CASE("ui_icon — known keys map to MDI codepoints") {
+    CHECK(ui_icon("mdi-cloud-percent") == "\U000F1A35");
+    CHECK(ui_icon("mdi-umbrella") == "\U000F054A");
+    CHECK(ui_icon("mdi-sun-wireless-outline") == "\U000F17FF");
+    CHECK(ui_icon("mdi-battery") == "\U000F0079");
+}
+
+TEST_CASE("ui_icon — unknown key returns empty string") {
+    CHECK(ui_icon("mdi-nonexistent") == "");
+    CHECK(ui_icon("") == "");
+}
+
+// Fake measurer: width = 1 per character. Makes test widths trivially predictable.
+static const TextMeasurer char_count_measurer = [](const std::string& s) {
+    return static_cast<int>(s.length());
+};
+
+TEST_CASE("wrap_text_pure — short text that fits returns single line") {
+    auto lines = wrap_text_pure("hello", 10, char_count_measurer);
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "hello");
+}
+
+TEST_CASE("wrap_text_pure — multi-word text that fits returns single line") {
+    auto lines = wrap_text_pure("hello world", 20, char_count_measurer);
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "hello world");
+}
+
+TEST_CASE("wrap_text_pure — wraps at word boundary when exceeding width") {
+    // "one two three" = 13 chars. max_width=7. "one two"=7 fits, adding " three" does not.
+    auto lines = wrap_text_pure("one two three", 7, char_count_measurer);
+    REQUIRE(lines.size() == 2);
+    CHECK(lines[0] == "one two");
+    CHECK(lines[1] == "three");
+}
+
+TEST_CASE("wrap_text_pure — multiple wraps") {
+    // max_width=5. "one"=3 ok. "one two"=7 too wide → flush "one", start "two".
+    // "two"=3 ok. "two three"=9 too wide → flush "two", start "three".
+    // "three"=5 ok. "three four"=10 too wide → flush "three", start "four".
+    auto lines = wrap_text_pure("one two three four", 5, char_count_measurer);
+    REQUIRE(lines.size() == 4);
+    CHECK(lines[0] == "one");
+    CHECK(lines[1] == "two");
+    CHECK(lines[2] == "three");
+    CHECK(lines[3] == "four");
+}
+
+TEST_CASE("wrap_text_pure — single word longer than max_width emitted on its own line") {
+    // "supercalifragilistic"=20, max_width=5. Word never fits but is emitted alone.
+    auto lines = wrap_text_pure("supercalifragilistic", 5, char_count_measurer);
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "supercalifragilistic");
+}
+
+TEST_CASE("wrap_text_pure — long word mid-sequence flushes and stands alone") {
+    auto lines = wrap_text_pure("hi supercalifragilistic bye", 5, char_count_measurer);
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0] == "hi");
+    CHECK(lines[1] == "supercalifragilistic");
+    CHECK(lines[2] == "bye");
+}
+
+TEST_CASE("wrap_text_pure — empty input returns empty vector") {
+    auto lines = wrap_text_pure("", 10, char_count_measurer);
+    CHECK(lines.empty());
+}
+
+TEST_CASE("wrap_text_pure — leading/trailing whitespace collapsed (istringstream behavior)") {
+    auto lines = wrap_text_pure("  hello  world  ", 20, char_count_measurer);
+    // Whole string length = 16 > 20? No, 16 <= 20, so early return with original text preserved.
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "  hello  world  ");
+}
+
+TEST_CASE("wrap_text_pure — whitespace collapsed when wrapping kicks in") {
+    // Force loop path: width 5 < total length. istringstream drops whitespace.
+    auto lines = wrap_text_pure("  hello  world  ", 5, char_count_measurer);
+    // "hello"=5 ok. "hello world"=11 too wide → flush "hello", start "world".
+    REQUIRE(lines.size() == 2);
+    CHECK(lines[0] == "hello");
+    CHECK(lines[1] == "world");
 }
