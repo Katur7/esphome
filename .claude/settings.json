@@ -4,7 +4,8 @@
       "Bash(make test *)",
       "Bash(make validate *)",
       "Bash(echo \"exit=$?\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(make compile *)"
     ]
   }
 }
