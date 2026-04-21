@@ -26,7 +26,7 @@ config/
 - Display rendering = single C++ lambda calling `text_utils` for measurement/wrapping
 - Refresh cycle: scripted sequence — enable ADC → read battery → wait for HA sensors → update display. Triggered on boot, then deep sleeps until next slot
 - Deep sleep schedule: 07, 11, 15, 19 (12h overnight gap). Sleep duration calculated dynamically to hit next slot
-- Dev Mode: HA-exposed switch disables deep sleep for OTA/development. When on, refreshes every 15 min. Default off. Reset button wakes from sleep
+- Dev Mode: `input_boolean.einkframe_dev_mode` in HA controls deep sleep. ESP subscribes via `binary_sensor` + homeassistant platform and calls `deep_sleep.prevent`/`allow` on state change. HA owns the state so it's toggleable while frame sleeps. Reset button wakes frame to pick up new state. When on, refreshes every 15 min
 
 ## Hardware
 

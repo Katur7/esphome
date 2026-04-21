@@ -34,15 +34,22 @@ switch:
     id: adc_enable
     restore_mode: ALWAYS_OFF   # Start LOW to save power
     name: "ADC Enable"
-  - platform: template
-    name: "Dev Mode"
+
+binary_sensor:
+  - platform: homeassistant
     id: dev_mode
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    on_turn_on:
-      - deep_sleep.prevent: deep_sleep_control
-    on_turn_off:
-      - deep_sleep.allow: deep_sleep_control
+    entity_id: input_boolean.einkframe_dev_mode
+    on_state:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: dev_mode
+            then:
+              - deep_sleep.prevent: deep_sleep_control
+              - logger.log: "Dev mode ON — deep sleep prevented"
+            else:
+              - deep_sleep.allow: deep_sleep_control
+              - logger.log: "Dev mode OFF — deep sleep allowed"
 
 time:
   - platform: homeassistant
@@ -54,7 +61,7 @@ time:
         then:
           - if:
               condition:
-                switch.is_on: dev_mode
+                binary_sensor.is_on: dev_mode
               then:
                 - script.execute: refresh_display_cycle
 
@@ -122,7 +129,7 @@ script:
     then:
       - if:
           condition:
-            switch.is_on: dev_mode
+            binary_sensor.is_on: dev_mode
           then:
             - logger.log: "Dev mode ON — staying awake"
           else:
@@ -186,7 +193,6 @@ display:
       auto example2_is = id(word_example2_is).state;
       auto example2_se = id(word_example2_se).state;
       float battery_voltage = id(battery_adc).state;
-
 
       //print info in log
       ESP_LOGD("epaper", "weather: %s", weather.c_str());
