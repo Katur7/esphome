@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>eInkFrame — 07a Scenarios</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="styles.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: #e8e8e3; height: 100%; font-family: "Inter", system-ui, sans-serif; }
+  body { overflow: hidden; }
+  .eink-shadow {
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.15), 0 24px 60px -20px rgba(0,0,0,0.25);
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="variant-swiss.jsx"></script>
+<script type="text/babel" src="variant-ord.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState } = React;
+
+// Shared weather/strip context — same across the three scenarios so the
+// reader can focus on how the entry body absorbs different content sizes.
+const SHARED = {
+  dateLong: "Tisdag 5 maj 2026",
+  weather: "clear-night",
+  temperature: "12",
+  expectedRain: "23",
+  uvIndex: "4.2",
+  batteryPercent: 77,
+};
+
+// --- Scenario 1: short headword, 2 translations, 1 example ---
+const SHORT = {
+  ...SHARED,
+  word: "regn",
+  pos: "no. (nafnorð)",
+  translations: "regn, dusk",
+  examples: [
+    {
+      is: "það rignir mikið í dag",
+      se: "det regnar mycket idag",
+    },
+  ],
+};
+
+// --- Scenario 2: medium headword, 4 translations, 2 examples ---
+const MEDIUM = {
+  ...SHARED,
+  word: "fjallganga",
+  pos: "no. (nafnorð)",
+  translations: "bergsbestigning, fjällvandring, bergvandring, bestigning",
+  examples: [
+    {
+      is: "við fórum í fjallgöngu á laugardaginn",
+      se: "vi gick på en bergsvandring i lördags",
+    },
+    {
+      is: "fjallgangan tók lengri tíma en við bjuggumst við",
+      se: "bergsbestigningen tog längre tid än vi hade räknat med",
+    },
+  ],
+};
+
+// --- Scenario 3: corpus max — same payload as the layouts file ---
+const PRESSURE = {
+  ...SHARED,
+  word: "sjálfsmorðshugleiðingar",
+  pos: "no. (nafnorð)",
+  translations: "slita som ett djur, arbeta, jobba, åstadkomma, utföra, vålla, bearbeta, vinna, segra, förvärvsarbeta, arbeta på <uppgiften>, vinna i längden, ta sig, försörja <sig>, motarbeta <det allmänna bästa>, tjäna pengar, jobba på <problemet>, vinna <ett pris>, jobba ikapp <förseningen>, jobba sig upp, utvinna <medicin> ur <växten>, bearbeta <data>, vinna en seger, arbeta mot <betalning>, arbeta med att rensa fisk, jobba med att rensa fisk, bearbeta <traumat>, bryta <silver> ur berget",
+  examples: [
+    {
+      is: "hann leit ekki á sjálfan sig sem atvinnusöngvara þótt hann syngi oft á mannamótum",
+      se: "han såg inte sig själv som någon professionell sångare även om han ofta sjöng offentligt",
+    },
+    {
+      is: "það segir sig sjálft að ekki er hægt að reka fyrirtækið lengi með tapi",
+      se: "det säger sig självt att det inte går att driva företaget någon längre tid när det går med förlust",
+    },
+  ],
+};
+
+const SCENARIOS = [
+  { id: "short",    label: "Short — ‘regn’ · 2 translations · 1 example",              data: SHORT },
+  { id: "medium",   label: "Medium — ‘fjallganga’ · 4 translations · 2 examples",      data: MEDIUM },
+  { id: "pressure", label: "Pressure — corpus max · 28 translations · 2 long examples", data: PRESSURE },
+];
+
+function App() {
+  return (
+    <DesignCanvas
+      title="07a · Content pressure test"
+      subtitle="Three scenarios on the same template. Short → Medium → Corpus max."
+    >
+      <DCSection
+        id="scenarios"
+        title="Faithful port across content lengths"
+        subtitle="Single headword, single layout. Translation cap is 15 — overflow rolls into ‘+N fler’. Examples stack with hairlines between."
+      >
+        {SCENARIOS.map(s => (
+          <DCArtboard key={s.id} id={s.id} label={s.label} width={800} height={480}>
+            <div className="eink-shadow" style={{ width: 800, height: 480 }}>
+              <VariantOrdA data={s.data} showBattery={true} />
+            </div>
+          </DCArtboard>
+        ))}
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

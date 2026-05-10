@@ -4,3 +4,4 @@ config/secrets.yaml
 TODO.txt
 
 test/test_runner
+.DS_Store

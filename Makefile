@@ -1,4 +1,6 @@
 CONFIG ?= einkframe.yaml
+DEVICE ?=
+DEVICE_FLAG = $(if $(DEVICE),--device $(DEVICE),)
 DOCKER = docker compose run --rm esphome
 
 CXX ?= g++
@@ -20,16 +22,16 @@ compile:
 	$(DOCKER) compile $(CONFIG)
 
 upload:
-	$(DOCKER) upload $(CONFIG)
+	$(DOCKER) upload $(CONFIG) $(DEVICE_FLAG)
 
 logs:
-	$(DOCKER) logs $(CONFIG)
+	$(DOCKER) logs $(CONFIG) $(DEVICE_FLAG)
 
 run:
-	$(DOCKER) run $(CONFIG)
+	$(DOCKER) run $(CONFIG) $(DEVICE_FLAG)
 
 dashboard:
-	$(DOCKER) dashboard /config
+	docker run --rm -it -p 6052:6052 -v "$(PWD)/config:/config" ghcr.io/esphome/esphome dashboard /config
 
 clean:
 	$(DOCKER) clean $(CONFIG)
