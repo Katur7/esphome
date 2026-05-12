@@ -170,18 +170,19 @@ display:
       ESP_LOGD("epaper", "expected rain: %s", id(expected_rain).state.c_str());
       ESP_LOGD("epaper", "uv index: %s", id(uv_index).state.c_str());
 
-      draw_title(it, id(myFont), TitleState{
+      // Folio header.
+      draw_folio_header(it, FolioFonts{
+        id(folioLabelFont),
+        id(folioTempFont),
+        id(font_mdi_folio),
+      }, FolioHeaderState{
+        "ORÐ DAGSINS",
         id(current_date).state,
-      });
-
-      draw_info_column(it, id(subheaderFont), id(normalFont), id(font_mdi_medium), InfoColumnState{
-        id(myWeather).state,
+        weather_icon(id(myWeather).state),
         id(myTemperature).state,
-        id(expected_rain).state,
-        id(uv_index).state,
-        id(battery_percent).state,
       });
 
+      // Examples list.
       std::vector<ExamplePair> examples;
       if (id(word_example1_is).state != "unknown") {
         examples.push_back({id(word_example1_is).state, id(word_example1_se).state});
@@ -190,8 +191,58 @@ display:
         examples.push_back({id(word_example2_is).state, id(word_example2_se).state});
       }
 
-      draw_word_of_day(it, id(subheaderFont), id(normalFont), id(smallerFont), WordOfDayState{
+      // Translations: split sensor string, cap to 15 visible (corpus max is 28).
+      auto capped = cap_translations(split_translations(id(word_translations).state), 15);
+
+      // Entry body. Word class hardcoded to "nafnorð" until HA exposes a `pos`
+      // field — every sample word in the design scenarios is nafnorð, so this
+      // is a placeholder, not a lie.
+      draw_entry(it, EntryFonts{
+        /*headword_ladder=*/ {
+          id(headwordFont36),
+          id(headwordFont44),
+          id(headwordFont52),
+          id(headwordFont60),
+          id(headwordFont68),
+          id(headwordFont74),
+        },
+        /*peg=*/         id(pegLabelFont),
+        /*italic_small=*/id(italicSmallFont),
+        /*translation=*/ id(translationFont),
+        /*unit=*/        id(stripUnitFont),
+        /*example_is=*/  id(exampleIsFont),
+        /*example_se=*/  id(italicSmallFont),
+      }, EntryState{
         id(myIcelandicWord).state,
-        id(word_translations).state,
+        "nafnorð",
+        /*inflections=*/ "",
+        capped.visible,
+        capped.overflow,
         examples,
+      });
+
+      // Bottom info strip.
+      char rain_buf[16];
+      std::snprintf(rain_buf, sizeof(rain_buf), "%d",
+                    static_cast<int>(std::round(std::atof(id(expected_rain).state.c_str()))));
+      char uv_buf[16];
+      std::snprintf(uv_buf, sizeof(uv_buf), "%.1f",
+                    std::atof(id(uv_index).state.c_str()));
+      char bat_buf[16];
+      std::snprintf(bat_buf, sizeof(bat_buf), "%d",
+                    static_cast<int>(std::round(id(battery_percent).state)));
+
+      draw_strip(it, StripFonts{
+        id(stripLabelFont),
+        id(stripValueFont),
+        id(stripUnitFont),
+        id(font_mdi_strip),
+      }, StripState{
+        std::vector<StripCell>{
+          {"REGN",     ui_icon("mdi-umbrella"),             rain_buf, "%"},
+          {"UV-INDEX", ui_icon("mdi-sun-wireless-outline"), uv_buf,   ""},
+          {"VÄDER",    weather_icon(id(myWeather).state),
+                       weather_label(id(myWeather).state),  ""},
+          {"BATTERI",  ui_icon("mdi-battery"),              bat_buf,  "%"},
+        },
       });

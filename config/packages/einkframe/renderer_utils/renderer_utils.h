@@ -6,41 +6,79 @@
 #include "esphome/components/display/display.h"
 #include "esphome/components/font/font.h"
 
-struct TitleState {
-    std::string date;
-};
-
-struct InfoColumnState {
-    std::string weather;
-    std::string temperature;
-    std::string expected_rain;
-    std::string uv_index;
-    float battery_percent;
-};
+// =============================================================================
+// 07a layout — three panel functions (folio header, entry, strip).
+// Dimensions and visual hierarchy described in:
+//   specs/einkframe/tasks/08-design-rewamp/DESIGN.md
+//   specs/einkframe/tasks/08-design-rewamp/preview/styles.css (.v-ord-a)
+// =============================================================================
 
 struct ExamplePair {
     std::string is;
     std::string se;
 };
 
-struct WordOfDayState {
+struct FolioHeaderState {
+    std::string title;         // "ORÐ DAGSINS"
+    std::string date;
+    std::string weather_icon;  // MDI glyph string
+    std::string temperature;   // sans degree sign — renderer appends it
+};
+
+struct FolioFonts {
+    esphome::font::Font *label;
+    esphome::font::Font *temp;
+    esphome::font::Font *mdi;
+};
+
+void draw_folio_header(esphome::display::Display &it,
+                       const FolioFonts &fonts,
+                       const FolioHeaderState &state);
+
+struct EntryState {
     std::string word;
-    std::string translations;
+    std::string pos_long;                     // already extracted from "no. (nafnorð)"
+    std::string inflections;                  // empty if absent → line is hidden
+    std::vector<std::string> translations;    // already split + capped
+    int translation_overflow;                 // 0 if not capped; else N for "+N fler"
     std::vector<ExamplePair> examples;
 };
 
-void draw_title(esphome::display::Display &it,
-                esphome::font::Font *title_font,
-                const TitleState &state);
+// Headword ladder: largest size first preferred. fit_headword_size_index walks
+// the ladder largest-to-smallest and picks the first size that fits. The vector
+// must be ordered smallest → largest (mirrors the einkframe_utils contract).
+struct EntryFonts {
+    std::vector<esphome::font::Font*> headword_ladder;
+    esphome::font::Font *peg;
+    esphome::font::Font *italic_small;
+    esphome::font::Font *translation;
+    esphome::font::Font *unit;          // "+N fler" tag
+    esphome::font::Font *example_is;
+    esphome::font::Font *example_se;
+};
 
-void draw_info_column(esphome::display::Display &it,
-                      esphome::font::Font *subheading_font,
-                      esphome::font::Font *normal_font,
-                      esphome::font::Font *mdi_font,
-                      const InfoColumnState &state);
+void draw_entry(esphome::display::Display &it,
+                const EntryFonts &fonts,
+                const EntryState &state);
 
-void draw_word_of_day(esphome::display::Display &it,
-                      esphome::font::Font *subheading_font,
-                      esphome::font::Font *normal_font,
-                      esphome::font::Font *smaller_font,
-                      const WordOfDayState &state);
+struct StripCell {
+    std::string label;
+    std::string icon;   // MDI glyph; empty = no icon
+    std::string value;
+    std::string unit;   // e.g. "%"; empty = no unit
+};
+
+struct StripState {
+    std::vector<StripCell> cells;  // expected 4
+};
+
+struct StripFonts {
+    esphome::font::Font *label;
+    esphome::font::Font *value;
+    esphome::font::Font *unit;
+    esphome::font::Font *mdi;
+};
+
+void draw_strip(esphome::display::Display &it,
+                const StripFonts &fonts,
+                const StripState &state);

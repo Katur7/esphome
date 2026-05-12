@@ -164,3 +164,147 @@ TEST_CASE("wrap_text_pure — whitespace collapsed when wrapping kicks in") {
     CHECK(lines[0] == "hello");
     CHECK(lines[1] == "world");
 }
+
+TEST_CASE("split_translations — comma-separated") {
+    auto items = split_translations("a, b, c");
+    REQUIRE(items.size() == 3);
+    CHECK(items[0] == "a");
+    CHECK(items[1] == "b");
+    CHECK(items[2] == "c");
+}
+
+TEST_CASE("split_translations — middle-dot separator") {
+    auto items = split_translations("a · b · c");
+    REQUIRE(items.size() == 3);
+    CHECK(items[0] == "a");
+    CHECK(items[1] == "b");
+    CHECK(items[2] == "c");
+}
+
+TEST_CASE("split_translations — mixed separators") {
+    auto items = split_translations("a, b · c, d");
+    REQUIRE(items.size() == 4);
+    CHECK(items[0] == "a");
+    CHECK(items[3] == "d");
+}
+
+TEST_CASE("split_translations — no separators") {
+    auto items = split_translations("single phrase");
+    REQUIRE(items.size() == 1);
+    CHECK(items[0] == "single phrase");
+}
+
+TEST_CASE("split_translations — empty and whitespace-only") {
+    CHECK(split_translations("").empty());
+    CHECK(split_translations("   ").empty());
+    CHECK(split_translations(", ,, ·").empty());
+}
+
+TEST_CASE("split_translations — preserves multi-word phrases") {
+    auto items = split_translations("arbeta på <uppgiften>, vinna i längden");
+    REQUIRE(items.size() == 2);
+    CHECK(items[0] == "arbeta på <uppgiften>");
+    CHECK(items[1] == "vinna i längden");
+}
+
+TEST_CASE("split_translations — adjacent separators yield no empties") {
+    auto items = split_translations("a,, b");
+    REQUIRE(items.size() == 2);
+    CHECK(items[0] == "a");
+    CHECK(items[1] == "b");
+}
+
+TEST_CASE("cap_translations — under cap returns all, no overflow") {
+    auto result = cap_translations({"a", "b", "c"}, 15);
+    CHECK(result.visible.size() == 3);
+    CHECK(result.overflow == 0);
+}
+
+TEST_CASE("cap_translations — exactly at cap returns all, no overflow") {
+    std::vector<std::string> items(15, "x");
+    auto result = cap_translations(items, 15);
+    CHECK(result.visible.size() == 15);
+    CHECK(result.overflow == 0);
+}
+
+TEST_CASE("cap_translations — over cap truncates and counts overflow") {
+    std::vector<std::string> items(28, "x");
+    auto result = cap_translations(items, 15);
+    CHECK(result.visible.size() == 15);
+    CHECK(result.overflow == 13);
+}
+
+TEST_CASE("cap_translations — empty input") {
+    auto result = cap_translations({}, 15);
+    CHECK(result.visible.empty());
+    CHECK(result.overflow == 0);
+}
+
+TEST_CASE("cap_translations — zero cap drops everything to overflow") {
+    auto result = cap_translations({"a", "b"}, 0);
+    CHECK(result.visible.empty());
+    CHECK(result.overflow == 2);
+}
+
+// Sized measurer: width = (size_index + 1) per character.
+// Ladder indices: 0 = smallest (1 px/char), N-1 = largest.
+static const SizedTextMeasurer linear_sized_measurer = [](int idx, const std::string& s) {
+    return static_cast<int>(s.length()) * (idx + 1);
+};
+
+TEST_CASE("fit_headword_size_index — short text fits at largest size") {
+    // "abc" at idx 5 → 18, at idx 4 → 15. Width budget 20 → idx 5 fits.
+    CHECK(fit_headword_size_index("abc", 6, 20, linear_sized_measurer) == 5);
+}
+
+TEST_CASE("fit_headword_size_index — long text drops to a middle size") {
+    // "abcdefghij" (10 chars). Width 30. idx 2 → 30 fits, idx 3 → 40 no.
+    CHECK(fit_headword_size_index("abcdefghij", 6, 30, linear_sized_measurer) == 2);
+}
+
+TEST_CASE("fit_headword_size_index — overflowing text returns smallest index") {
+    // 100-char string, width 10 → even idx 0 (1 px/char × 100 = 100) overflows.
+    std::string huge(100, 'x');
+    CHECK(fit_headword_size_index(huge, 6, 10, linear_sized_measurer) == 0);
+}
+
+TEST_CASE("fit_headword_size_index — empty ladder returns 0") {
+    CHECK(fit_headword_size_index("abc", 0, 100, linear_sized_measurer) == 0);
+}
+
+TEST_CASE("fit_headword_size_index — empty text fits at largest") {
+    CHECK(fit_headword_size_index("", 6, 100, linear_sized_measurer) == 5);
+}
+
+TEST_CASE("weather_label — known states map to Swedish") {
+    CHECK(weather_label("sunny") == "soligt");
+    CHECK(weather_label("rainy") == "regn");
+    CHECK(weather_label("partlycloudy") == "växlande");
+    CHECK(weather_label("snowy-rainy") == "snöblandat");
+    CHECK(weather_label("windy-variant") == "kraftig vind");
+    CHECK(weather_label("exceptional") == "extremt");
+}
+
+TEST_CASE("weather_label — unknown state passes through unchanged") {
+    CHECK(weather_label("not-a-real-state") == "not-a-real-state");
+    CHECK(weather_label("") == "");
+}
+
+TEST_CASE("pos_long — extracts content inside parens") {
+    CHECK(pos_long("no. (nafnorð)") == "nafnorð");
+    CHECK(pos_long("lo. (lýsingarorð)") == "lýsingarorð");
+    CHECK(pos_long("so. (sagnorð)") == "sagnorð");
+}
+
+TEST_CASE("pos_long — no parens falls back to input") {
+    CHECK(pos_long("no.") == "no.");
+    CHECK(pos_long("") == "");
+}
+
+TEST_CASE("pos_long — unclosed paren falls back to input") {
+    CHECK(pos_long("no. (oops") == "no. (oops");
+}
+
+TEST_CASE("pos_long — empty parens returns empty") {
+    CHECK(pos_long("no. ()") == "");
+}

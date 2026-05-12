@@ -1,32 +1,99 @@
 # Define font to show info
 font:
-  - file: "gfonts://Inter@700"
-    id: myFont
-    size: 32
+  # ---- 07a layout: Newsreader 600 headword ladder (auto-fit 36..74) ----
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont36
+    size: 36
     glyphsets: GF_Latin_Core
     ignore_missing_glyphs: true
-  - file: "gfonts://Inter@700"
-    id: subheaderFont
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont44
+    size: 44
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont52
+    size: 52
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont60
+    size: 60
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont68
+    size: 68
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont74
+    size: 74
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+
+  # ---- 07a body serif (Newsreader) ----
+  - file: "gfonts://Newsreader@500"
+    id: translationFont
+    size: 20
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Newsreader@500"
+    id: exampleIsFont
+    size: 19
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  # Italic size covers the word class line, optional inflections, and SE example
+  # lines. The design's 13/14 split is imperceptible; one entry is enough.
+  - file:
+      type: gfonts
+      family: Newsreader
+      weight: 400
+      italic: true
+    id: italicSmallFont
+    size: 18
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+
+  # ---- 07a folio header + peg labels + strip (Inter) ----
+  - file: "gfonts://Inter@600"
+    id: folioLabelFont
+    size: 16
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Inter@800"
+    id: folioTempFont
     size: 24
     glyphsets: GF_Latin_Core
     ignore_missing_glyphs: true
   - file: "gfonts://Inter@700"
-    id: normalFont
-    size: 20
+    id: pegLabelFont
+    size: 10
     glyphsets: GF_Latin_Core
     ignore_missing_glyphs: true
+  - file: "gfonts://Inter@800"
+    id: stripLabelFont
+    size: 9
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  - file: "gfonts://Inter@900"
+    id: stripValueFont
+    size: 22
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
+  # Strip "%" suffix unit and the "+N fler" overflow tag.
   - file: "gfonts://Inter@700"
-    id: smallerFont
-    size: 16
+    id: stripUnitFont
+    size: 14
     glyphsets: GF_Latin_Core
     ignore_missing_glyphs: true
 
-  # Include Material Design Icons font
-  # Thanks to https://community.home-assistant.io/t/display-materialdesign-icons-on-esphome-attached-to-screen/199790/16
+  # MDI sized for 07a: 22 px in strip cells, 32 px in folio header.
+  # Credit: https://community.home-assistant.io/t/display-materialdesign-icons-on-esphome-attached-to-screen/199790/16
   - file: 'fonts/materialdesignicons-webfont.ttf'
-    id: font_mdi_medium
-    size: 36
-    glyphs: [
+    id: font_mdi_strip
+    size: 22
+    glyphs: &mdi_glyphs [
       "\U000F058E", # mdi-water-percent
       "\U000F0D43", # mdi-air-filter
       "\U000F002A", # mdi-alert-outline
@@ -45,9 +112,13 @@ font:
       "\U000F0599", # mdi-weather-sunny
       "\U000F059D", # mdi-weather-windy
       "\U000F059E", # mdi-weather-windy-variant
-
       "\U000F1A35", # mdi-cloud-percent
       "\U000F054A", # mdi-umbrella
       "\U000F17FF", # mdi-sun-wireless-outline
       "\U000F0079"  # mdi-battery
     ]
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: font_mdi_folio
+    size: 32
+    glyphs: *mdi_glyphs
+
