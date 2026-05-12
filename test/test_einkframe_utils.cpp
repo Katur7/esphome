@@ -165,6 +165,50 @@ TEST_CASE("wrap_text_pure — whitespace collapsed when wrapping kicks in") {
     CHECK(lines[1] == "world");
 }
 
+TEST_CASE("wrap_text_pure — hard_break splits oversized word with hyphens") {
+    // 10-char word, max_width=5. Loop tries cur+ch+"-" each step; flushes
+    // "abcd-" when adding "e" would push trial to width 6.
+    auto lines = wrap_text_pure("abcdefghij", 5, char_count_measurer, /*hard_break=*/true);
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0] == "abcd-");
+    CHECK(lines[1] == "efgh-");
+    CHECK(lines[2] == "ij");  // tail line has no trailing hyphen
+}
+
+TEST_CASE("wrap_text_pure — hard_break never splits a UTF-8 multibyte char") {
+    // "ð" is 2 bytes (0xC3 0xB0). With byte-counting measurer at max_width=3,
+    // each line must be valid UTF-8 — no orphan 0xC3 or 0xB0.
+    auto lines = wrap_text_pure("aðbðc", 3, char_count_measurer, /*hard_break=*/true);
+    for (const auto& line : lines) {
+        for (size_t i = 0; i < line.size(); i++) {
+            unsigned char b = static_cast<unsigned char>(line[i]);
+            // Continuation bytes (10xxxxxx) must be preceded by a lead byte.
+            if ((b & 0xC0) == 0x80) {
+                REQUIRE(i > 0);
+                unsigned char prev = static_cast<unsigned char>(line[i - 1]);
+                CHECK((prev & 0xC0) != 0x00);  // prev is non-ASCII lead or continuation
+                CHECK(prev >= 0x80);
+            }
+        }
+    }
+    // Concatenating dropped hyphens reconstructs the input.
+    std::string rejoined;
+    for (auto& line : lines) {
+        rejoined += (line.size() > 0 && line.back() == '-') ? line.substr(0, line.size() - 1) : line;
+    }
+    CHECK(rejoined == "aðbðc");
+}
+
+TEST_CASE("wrap_text_pure — hard_break with width too narrow for char+hyphen emits raw chars") {
+    // max_width=1. Even "a-"=2 exceeds. Each char must be emitted alone, no hyphen.
+    auto lines = wrap_text_pure("abcd", 1, char_count_measurer, /*hard_break=*/true);
+    REQUIRE(lines.size() == 4);
+    CHECK(lines[0] == "a");
+    CHECK(lines[1] == "b");
+    CHECK(lines[2] == "c");
+    CHECK(lines[3] == "d");
+}
+
 TEST_CASE("split_translations — comma-separated") {
     auto items = split_translations("a, b, c");
     REQUIRE(items.size() == 3);
@@ -307,4 +351,87 @@ TEST_CASE("pos_long — unclosed paren falls back to input") {
 
 TEST_CASE("pos_long — empty parens returns empty") {
     CHECK(pos_long("no. ()") == "");
+}
+
+// plan_dotted_translations tests use:
+//   char_count_measurer (1 unit per byte)
+//   sep = " - " (3 bytes wide)
+//   line_h = 10, y_start = 0
+TEST_CASE("plan_dotted_translations — empty items returns empty plan") {
+    auto plan = plan_dotted_translations({}, char_count_measurer, " - ", 3,
+                                          20, 10, 0, 1000, false);
+    CHECK(plan.full_lines.empty());
+    CHECK(plan.trailing_text.empty());
+    CHECK(plan.trailing_width == 0);
+    CHECK(plan.dynamic_overflow == 0);
+}
+
+TEST_CASE("plan_dotted_translations — items joined onto a single trailing line when they fit") {
+    // "hi - yo" = 7 bytes, max_width=10. Whole thing rides in trailing.
+    auto plan = plan_dotted_translations({"hi", "yo"}, char_count_measurer, " - ", 3,
+                                          10, 10, 0, 1000, false);
+    CHECK(plan.full_lines.empty());
+    CHECK(plan.trailing_text == "hi - yo");
+    CHECK(plan.trailing_width == 7);
+    CHECK(plan.dynamic_overflow == 0);
+}
+
+TEST_CASE("plan_dotted_translations — wraps to multiple lines when joined width exceeds max_width") {
+    // 3 items of width 3 each, sep width 3. "abc - def"=9 > 7 forces wrap.
+    auto plan = plan_dotted_translations({"abc", "def", "ghi"}, char_count_measurer, " - ", 3,
+                                          7, 10, 0, 1000, false);
+    REQUIRE(plan.full_lines.size() == 2);
+    CHECK(plan.full_lines[0] == "abc");
+    CHECK(plan.full_lines[1] == "def");
+    CHECK(plan.trailing_text == "ghi");
+    CHECK(plan.trailing_width == 3);
+    CHECK(plan.dynamic_overflow == 0);
+}
+
+TEST_CASE("plan_dotted_translations — vertical limit truncates and counts dynamic overflow") {
+    // 5 items, max_width=1 (one per line), line_h=10, y_start=0, max_y_bottom=25.
+    // No tag reserve → can fit y=0..15 i.e. 2 lines, push 3 to overflow.
+    auto plan = plan_dotted_translations({"a", "b", "c", "d", "e"}, char_count_measurer, " - ", 3,
+                                          1, 10, 0, 25, false);
+    REQUIRE(plan.full_lines.size() == 2);
+    CHECK(plan.full_lines[0] == "a");
+    CHECK(plan.full_lines[1] == "b");
+    CHECK(plan.trailing_text.empty());  // broke after a buf flush
+    CHECK(plan.dynamic_overflow == 3);
+}
+
+TEST_CASE("plan_dotted_translations — reserve_for_tag eats one line of capacity") {
+    // Same shape as above; with reserve_for_tag=true the planner holds back a
+    // line for the caller's "+N fler" tag, so only 1 item makes it to full.
+    auto plan = plan_dotted_translations({"a", "b", "c", "d", "e"}, char_count_measurer, " - ", 3,
+                                          1, 10, 0, 25, true);
+    REQUIRE(plan.full_lines.size() == 1);
+    CHECK(plan.full_lines[0] == "a");
+    CHECK(plan.dynamic_overflow == 4);
+}
+
+TEST_CASE("plan_dotted_translations — oversized item is space-wrapped inline") {
+    // Single "hello world" item (11) at max_width=5 → wrap_text_pure yields
+    // ["hello", "world"]; "hello" goes to full_lines, "world" becomes trailing.
+    auto plan = plan_dotted_translations({"hello world"}, char_count_measurer, " - ", 3,
+                                          5, 10, 0, 1000, false);
+    REQUIRE(plan.full_lines.size() == 1);
+    CHECK(plan.full_lines[0] == "hello");
+    CHECK(plan.trailing_text == "world");
+    CHECK(plan.trailing_width == 5);
+    CHECK(plan.dynamic_overflow == 0);
+}
+
+TEST_CASE("plan_dotted_translations — truncates mid-item when internal wrap exceeds y limit") {
+    // Single "a b c d e" wraps to 5 sub-lines at max_width=1. With y_start=0,
+    // line_h=10, max_y_bottom=25 and no tag reserve: 2 sub-lines fit (y→10,
+    // y→20); the third can't. Whole item counts as overflowed; the partial
+    // sub-lines already drawn stay in full_lines, trailing remains empty.
+    auto plan = plan_dotted_translations({"a b c d e"}, char_count_measurer, " - ", 3,
+                                          1, 10, 0, 25, false);
+    REQUIRE(plan.full_lines.size() == 2);
+    CHECK(plan.full_lines[0] == "a");
+    CHECK(plan.full_lines[1] == "b");
+    CHECK(plan.trailing_text.empty());
+    CHECK(plan.dynamic_overflow == 1);
 }

@@ -9,7 +9,7 @@ passes.
 
 - **`einkframe_utils` helpers** (pure, doctested): `split_translations`,
   `cap_translations`, `fit_headword_size_index`, `weather_label`,
-  `pos_long`. 25 new doctests, 47/47 pass.
+  `pos_long`, `plan_dotted_translations`. 57/57 doctests pass.
 - **`renderer_utils` panel functions**: `draw_folio_header`,
   `draw_entry` (composed from internal `draw_hero_column` +
   `draw_examples_column`), `draw_strip`. State and font structs grouped
@@ -29,10 +29,9 @@ passes.
   overflows, `draw_wrapped` falls back to word-boundary wrapping.
 - **Italic 13 and 14 merged** into a single Newsreader 400-italic font
   (18 px after tuning). 1 px difference isn't visible.
-- **Word class hardcoded** to `"nafnorð"` in the lambda. HA doesn't
-  expose `pos` yet, and every design scenario is a noun, so this is a
-  placeholder, not a lie. Swap to `pos_long(id(pos).state)` when the
-  template sensor lands.
+- **Word class** now wired to the HA `word_pos` sensor via
+  `pos_long(id(word_pos).state)`. Empty / "None" states fall back to
+  blank rather than the old hardcoded `"nafnorð"`.
 - **Coordinate system shifted** to the panel's usable print area
   (55,45)..(739,479), which forced left/right columns from 350 to ~292 px
   each. Without the shift, content overflowed past the bezel.
@@ -43,6 +42,46 @@ passes.
 - **Internal refactor**: extracted `draw_wrapped` (used 4× — headword
   overflow, inflections, IS + SE examples) and a `start_with_item`
   lambda inside `draw_dotted_translations`. Renderer shrank ~30 lines.
+
+## Pressure-test pass
+
+Pressure-tested the layout against the corpus extreme
+(`sjálfsmorðshugleiðingar`, 28 translations, two long example sentences).
+Two real defects surfaced and got fixed:
+
+- **Headword overflow**: even the smallest 36 px ladder rung couldn't
+  hold the compound noun on one line, and the existing space-only wrap
+  can't break a single token. Added a 28 px rung and a `hard_break`
+  flag on `wrap_text_pure` that splits at UTF-8 char boundaries with a
+  trailing `-` (no orphaned 0xC3 / 0xB0 bytes; mid-syllable but safe).
+  Wired through `wrap_text` and `draw_wrapped` as an opt-in; only the
+  headword path uses it. Translations and examples keep space-only
+  wrap.
+- **Translations punched through the strip**: wrapping the headword
+  pushed SVENSKA down, and the static `cap_translations(items, 15)`
+  didn't adapt. Replaced the static cap with a vertical-aware planner.
+  `plan_dotted_translations` (pure, doctested) takes a `max_y_bottom`
+  and stops emitting once one more line would overflow, reserving a
+  line for the `+N fler` tag when overflow exists. Skipped items roll
+  into the tag's count. `draw_dotted_translations` is now a thin
+  printf driver over the planner. New `BODY_BOTTOM_PAD = 12 px`
+  breathing room above the strip.
+
+10 new doctests cover hard-break behavior (ASCII, UTF-8 safety,
+degenerate narrow width) and the planner (empty input, single-line
+fit, multi-line wrap, vertical truncation with and without tag
+reserve, oversized item space-wrap, mid-item truncation).
+
+## Known follow-ups
+
+- `draw_examples_column` has the same shape of bug we just fixed for
+  translations — no `max_y_bottom`, no vertical clip. Long example
+  pairs can punch through the strip just like translations did. Apply
+  the planner pattern when it bites.
+- `fit_headword_size_index` only reasons about 1-line fit; with hard
+  wrap in play, knowing the headword section's actual rendered height
+  would let the layout react more cleanly upstream of the translation
+  planner.
 
 ## Lessons
 

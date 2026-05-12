@@ -54,6 +54,7 @@ constexpr int CLASS_TOP_MARGIN = 8;
 constexpr int INFL_TOP_MARGIN = 2;
 constexpr int SE_BLOCK_TOP_MARGIN = 16;
 constexpr int TRANS_TOP_MARGIN = 8;
+constexpr int BODY_BOTTOM_PAD = 12;  // breathing room above the bottom strip
 
 // ---- Examples column ----
 constexpr int EX_LIST_TOP_MARGIN = 10;
@@ -90,9 +91,11 @@ void draw_peg(Display &it, Font *font, int x, int y_top,
 // Wrap `text` for `font` at `max_width` and stamp each line at (x, y),
 // advancing y by the font's line height. Safe to call when the text already
 // fits on one line: wrap_text returns a single-element vector in that case.
+// `hard_break` allows mid-word hyphenation for tokens that exceed `max_width`
+// (e.g. long Icelandic compound headwords).
 void draw_wrapped(Display &it, Font *font, const std::string &text,
-                  int x, int &y, int max_width) {
-    std::vector<std::string> lines = wrap_text(font, text, max_width);
+                  int x, int &y, int max_width, bool hard_break = false) {
+    std::vector<std::string> lines = wrap_text(font, text, max_width, hard_break);
     const int line_h = font->get_height();
     for (const auto &line : lines) {
         it.printf(x, y, font, "%s", line.c_str());
@@ -100,88 +103,49 @@ void draw_wrapped(Display &it, Font *font, const std::string &text,
     }
 }
 
-// Greedy line-fill: place dotted translations across multiple lines, wrapping
-// individual phrases at space-only boundaries (never mid-token). The "+N fler"
-// overflow tag is rendered in Inter via `unit_font` and may share the final
-// line with the last translation if it fits.
+// Drive `plan_dotted_translations` (pure layout) with real font widths and
+// stamp the resulting lines. The "+N fler" tag is mixed-font (Inter via
+// `unit_font`) and inlines onto the last partial line when it fits.
 void draw_dotted_translations(Display &it, Font *trans_font, Font *unit_font,
                               const std::vector<std::string> &items,
                               int overflow_count,
-                              int x, int &y, int max_width) {
+                              int x, int &y, int max_width,
+                              int max_y_bottom) {
     if (items.empty() && overflow_count == 0) return;
 
     const int line_h = trans_font->get_height();
     const int sep_w = get_text_width(trans_font, TRANS_SEP);
-
-    std::string buf;
-    int buf_w = 0;
-
-    auto emit_line = [&]() {
-        if (!buf.empty()) {
-            it.printf(x, y, trans_font, "%s", buf.c_str());
-            y += line_h;
-            buf.clear();
-            buf_w = 0;
-        }
+    const TextMeasurer measure = [trans_font](const std::string &s) {
+        return get_text_width(trans_font, s);
     };
 
-    // Replace `buf` with `item` (assumed empty `buf` precondition). If `item`
-    // is longer than the column, wrap it at spaces — all sub-lines except the
-    // last are emitted directly, and the final sub-line becomes the new buf so
-    // a subsequent translation can still join it.
-    auto start_with_item = [&](const std::string &item, int item_w) {
-        if (item_w <= max_width) {
-            buf = item;
-            buf_w = item_w;
-            return;
-        }
-        std::vector<std::string> sub_lines = wrap_text(trans_font, item, max_width);
-        for (size_t j = 0; j < sub_lines.size(); j++) {
-            if (j + 1 == sub_lines.size()) {
-                buf = sub_lines[j];
-                buf_w = get_text_width(trans_font, sub_lines[j]);
-            } else {
-                it.printf(x, y, trans_font, "%s", sub_lines[j].c_str());
-                y += line_h;
-            }
-        }
-    };
+    const auto plan = plan_dotted_translations(items, measure, TRANS_SEP, sep_w,
+                                                max_width, line_h, y,
+                                                max_y_bottom,
+                                                /*reserve_for_tag=*/overflow_count > 0);
 
-    for (const auto &item : items) {
-        const int item_w = get_text_width(trans_font, item);
-
-        if (buf.empty()) {
-            start_with_item(item, item_w);
-            continue;
-        }
-
-        if (buf_w + sep_w + item_w <= max_width) {
-            buf += TRANS_SEP + item;
-            buf_w = buf_w + sep_w + item_w;
-        } else {
-            emit_line();
-            start_with_item(item, item_w);
-        }
+    for (const auto &line : plan.full_lines) {
+        it.printf(x, y, trans_font, "%s", line.c_str());
+        y += line_h;
     }
 
-    if (overflow_count > 0) {
+    const int total_overflow = overflow_count + plan.dynamic_overflow;
+    if (total_overflow > 0) {
         char tag_buf[32];
-        std::snprintf(tag_buf, sizeof(tag_buf), "+%d fler", overflow_count);
+        std::snprintf(tag_buf, sizeof(tag_buf), "+%d fler", total_overflow);
         const std::string tag = tag_buf;
         const int tag_w = get_text_width(unit_font, tag);
 
-        if (!buf.empty()) {
-            // Inline tag if it fits on the current line (mixed-font draw).
-            if (buf_w + sep_w + tag_w <= max_width) {
-                const std::string prefix = buf + TRANS_SEP;
+        if (!plan.trailing_text.empty()) {
+            if (plan.trailing_width + sep_w + tag_w <= max_width) {
+                const std::string prefix = plan.trailing_text + TRANS_SEP;
                 it.printf(x, y, trans_font, "%s", prefix.c_str());
                 const int prefix_w = get_text_width(trans_font, prefix);
                 it.printf(x + prefix_w, y, unit_font, "%s", tag.c_str());
                 y += line_h;
-                buf.clear();
-                buf_w = 0;
             } else {
-                emit_line();
+                it.printf(x, y, trans_font, "%s", plan.trailing_text.c_str());
+                y += line_h;
                 it.printf(x, y, unit_font, "%s", tag.c_str());
                 y += line_h;
             }
@@ -189,9 +153,10 @@ void draw_dotted_translations(Display &it, Font *trans_font, Font *unit_font,
             it.printf(x, y, unit_font, "%s", tag.c_str());
             y += line_h;
         }
+    } else if (!plan.trailing_text.empty()) {
+        it.printf(x, y, trans_font, "%s", plan.trailing_text.c_str());
+        y += line_h;
     }
-
-    emit_line();
 }
 
 void draw_hero_column(Display &it, const EntryFonts &fonts, const EntryState &state) {
@@ -209,9 +174,9 @@ void draw_hero_column(Display &it, const EntryFonts &fonts, const EntryState &st
                                              static_cast<int>(fonts.headword_ladder.size()),
                                              hw_max_w, measure);
     Font *hw_font = fonts.headword_ladder[idx];
-    // If even the smallest ladder size overflows, draw_wrapped breaks at
-    // spaces (rare edge case). Otherwise wrap_text returns one line.
-    draw_wrapped(it, hw_font, state.word, LEFT_COL_X, y, hw_max_w);
+    // Smallest rung may still overflow on extreme compound nouns like
+    // "sjálfsmorðshugleiðingar"; allow UTF-8 safe hyphenated wrap as fallback.
+    draw_wrapped(it, hw_font, state.word, LEFT_COL_X, y, hw_max_w, /*hard_break=*/true);
 
     if (!state.pos_long.empty()) {
         y += CLASS_TOP_MARGIN;
@@ -230,7 +195,8 @@ void draw_hero_column(Display &it, const EntryFonts &fonts, const EntryState &st
 
     draw_dotted_translations(it, fonts.translation, fonts.unit,
                              state.translations, state.translation_overflow,
-                             LEFT_COL_X, y, LEFT_COL_W);
+                             LEFT_COL_X, y, LEFT_COL_W,
+                             STRIP_Y - BODY_BOTTOM_PAD);
 }
 
 void draw_examples_column(Display &it, const EntryFonts &fonts, const EntryState &state) {

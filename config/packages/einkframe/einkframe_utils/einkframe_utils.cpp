@@ -164,6 +164,92 @@ std::string weather_label(const std::string& state) {
     return it == table.end() ? state : it->second;
 }
 
+TranslationLayout plan_dotted_translations(const std::vector<std::string>& items,
+                                            const TextMeasurer& measure,
+                                            const std::string& sep,
+                                            int sep_w,
+                                            int max_width,
+                                            int line_h,
+                                            int y_start,
+                                            int max_y_bottom,
+                                            bool reserve_for_tag) {
+    TranslationLayout out;
+    out.trailing_width = 0;
+    out.dynamic_overflow = 0;
+
+    if (items.empty()) return out;
+
+    std::string buf;
+    int buf_w = 0;
+    int y = y_start;
+    bool truncated = false;
+
+    auto will_have_overflow = [&]() {
+        return reserve_for_tag || truncated;
+    };
+
+    auto line_fits = [&]() {
+        const int reserve = will_have_overflow() ? line_h : 0;
+        return y + line_h + reserve <= max_y_bottom;
+    };
+
+    auto flush_buf = [&]() {
+        if (!buf.empty()) {
+            out.full_lines.push_back(buf);
+            y += line_h;
+            buf.clear();
+            buf_w = 0;
+        }
+    };
+
+    auto start_with_item = [&](const std::string& item, int item_w) -> bool {
+        if (item_w <= max_width) {
+            buf = item;
+            buf_w = item_w;
+            return true;
+        }
+        std::vector<std::string> sub_lines = wrap_text_pure(item, max_width, measure);
+        for (size_t j = 0; j < sub_lines.size(); j++) {
+            if (j + 1 == sub_lines.size()) {
+                buf = sub_lines[j];
+                buf_w = measure(sub_lines[j]);
+            } else {
+                if (!line_fits()) return false;
+                out.full_lines.push_back(sub_lines[j]);
+                y += line_h;
+            }
+        }
+        return true;
+    };
+
+    size_t i = 0;
+    for (; i < items.size(); i++) {
+        const std::string& item = items[i];
+        const int item_w = measure(item);
+
+        if (buf.empty()) {
+            if (!line_fits()) { truncated = true; break; }
+            if (!start_with_item(item, item_w)) { truncated = true; break; }
+            continue;
+        }
+
+        if (buf_w + sep_w + item_w <= max_width) {
+            buf += sep + item;
+            buf_w = buf_w + sep_w + item_w;
+        } else {
+            if (!line_fits()) { truncated = true; break; }
+            flush_buf();
+            if (!line_fits()) { truncated = true; break; }
+            if (!start_with_item(item, item_w)) { truncated = true; break; }
+        }
+    }
+    out.dynamic_overflow = static_cast<int>(items.size() - i);
+
+    out.trailing_text = buf;
+    out.trailing_width = buf_w;
+    return out;
+}
+
 std::string pos_long(const std::string& pos) {
     auto open = pos.find('(');
     if (open == std::string::npos) return pos;
@@ -172,7 +258,9 @@ std::string pos_long(const std::string& pos) {
     return pos.substr(open + 1, close - open - 1);
 }
 
-std::vector<std::string> wrap_text_pure(const std::string& text, int max_width, const TextMeasurer& measure) {
+std::vector<std::string> wrap_text_pure(const std::string& text, int max_width,
+                                         const TextMeasurer& measure,
+                                         bool hard_break) {
     std::vector<std::string> wrapped_lines;
     if (text.empty()) {
         return wrapped_lines;
@@ -182,6 +270,39 @@ std::vector<std::string> wrap_text_pure(const std::string& text, int max_width, 
         wrapped_lines.push_back(text);
         return wrapped_lines;
     }
+
+    auto utf8_step = [](unsigned char b) -> size_t {
+        if (b < 0x80) return 1;
+        if ((b & 0xE0) == 0xC0) return 2;
+        if ((b & 0xF0) == 0xE0) return 3;
+        if ((b & 0xF8) == 0xF0) return 4;
+        return 1;
+    };
+
+    // Char-split a single oversized word, pushing hyphenated sub-lines and
+    // returning the trailing partial (no hyphen) so it can keep accumulating.
+    auto hard_break_word = [&](const std::string& word) -> std::string {
+        std::string cur;
+        size_t pos = 0;
+        while (pos < word.size()) {
+            const size_t step = utf8_step(static_cast<unsigned char>(word[pos]));
+            const std::string ch = word.substr(pos, step);
+            const bool is_last = (pos + step) >= word.size();
+            const std::string trial = is_last ? (cur + ch) : (cur + ch + "-");
+            if (measure(trial) <= max_width) {
+                cur += ch;
+                pos += step;
+            } else if (cur.empty()) {
+                // Single glyph + hyphen still overflows: emit the glyph alone.
+                wrapped_lines.push_back(ch);
+                pos += step;
+            } else {
+                wrapped_lines.push_back(cur + "-");
+                cur.clear();
+            }
+        }
+        return cur;
+    };
 
     std::istringstream iss(text);
     std::string word;
@@ -194,8 +315,13 @@ std::vector<std::string> wrap_text_pure(const std::string& text, int max_width, 
         } else {
             if (!current_line.empty()) {
                 wrapped_lines.push_back(current_line);
+                current_line.clear();
             }
-            current_line = word;
+            if (hard_break && measure(word) > max_width) {
+                current_line = hard_break_word(word);
+            } else {
+                current_line = word;
+            }
         }
     }
 

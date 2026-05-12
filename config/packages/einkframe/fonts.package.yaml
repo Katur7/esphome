@@ -1,6 +1,11 @@
 # Define font to show info
 font:
-  # ---- 07a layout: Newsreader 600 headword ladder (auto-fit 36..74) ----
+  # ---- 07a layout: Newsreader 600 headword ladder (auto-fit 28..74) ----
+  - file: "gfonts://Newsreader@600"
+    id: headwordFont28
+    size: 28
+    glyphsets: GF_Latin_Core
+    ignore_missing_glyphs: true
   - file: "gfonts://Newsreader@600"
     id: headwordFont36
     size: 36

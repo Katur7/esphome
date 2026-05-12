@@ -37,11 +37,12 @@ int get_text_width(esphome::font::Font *font, std::string text) {
     return width;
 }
 
-std::vector<std::string> wrap_text(esphome::font::Font *font, std::string text, int max_width) {
+std::vector<std::string> wrap_text(esphome::font::Font *font, std::string text, int max_width,
+                                    bool hard_break) {
     if (font == nullptr) {
         return {};
     }
     return wrap_text_pure(text, max_width, [font](const std::string& s) {
         return get_text_width(font, s);
-    });
+    }, hard_break);
 }

@@ -191,14 +191,13 @@ display:
         examples.push_back({id(word_example2_is).state, id(word_example2_se).state});
       }
 
-      // Translations: split sensor string, cap to 15 visible (corpus max is 28).
-      auto capped = cap_translations(split_translations(id(word_translations).state), 15);
+      // Translations: split sensor string. The renderer caps visible items by
+      // vertical space and rolls the rest into "+N fler".
+      auto trans_items = split_translations(id(word_translations).state);
 
-      // Entry body. Word class hardcoded to "nafnorð" until HA exposes a `pos`
-      // field — every sample word in the design scenarios is nafnorð, so this
-      // is a placeholder, not a lie.
       draw_entry(it, EntryFonts{
         /*headword_ladder=*/ {
+          id(headwordFont28),
           id(headwordFont36),
           id(headwordFont44),
           id(headwordFont52),
@@ -216,8 +215,8 @@ display:
         id(myIcelandicWord).state,
         "nafnorð",
         /*inflections=*/ "",
-        capped.visible,
-        capped.overflow,
+        trans_items,
+        0,
         examples,
       });
 
