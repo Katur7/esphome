@@ -47,6 +47,18 @@ text_sensor:
     entity_id: sensor.word_of_the_day_example_2_se
     id: word_example2_se
     internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_pos
+    id: word_pos
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_gender
+    id: word_gender
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.word_of_the_day_stuttbeyg
+    id: word_inflection
+    internal: true
 
 sensor:
   - platform: adc

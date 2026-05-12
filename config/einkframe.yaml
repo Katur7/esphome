@@ -195,6 +195,11 @@ display:
       // vertical space and rolls the rest into "+N fler".
       auto trans_items = split_translations(id(word_translations).state);
 
+      const std::string &pos_raw = id(word_pos).state;
+      const std::string pos = (pos_raw.empty() || pos_raw == "None")
+        ? std::string()
+        : pos_long(pos_raw);
+
       draw_entry(it, EntryFonts{
         /*headword_ladder=*/ {
           id(headwordFont28),
@@ -213,7 +218,7 @@ display:
         /*example_se=*/  id(italicSmallFont),
       }, EntryState{
         id(myIcelandicWord).state,
-        "nafnorð",
+        pos,
         /*inflections=*/ "",
         trans_items,
         0,
