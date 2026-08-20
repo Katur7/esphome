@@ -7,3 +7,22 @@ services:
     stdin_open: true
     tty: true
     restart: "no"
+
+  # USB flashing only — the default service has no device access.
+  # A board that has never run ESPHome has no OTA to talk to, so its first
+  # upload must go over USB; after that, plain `make upload` over OTA works.
+  #
+  # Binds all of /dev rather than a single node so it works on whichever port
+  # the board enumerates as, and does not fail when nothing is plugged in.
+  # That needs privileged to get past device cgroup rules and SELinux labelling.
+  # Narrow it to `devices: [/dev/ttyACM0]` if you would rather pin the port.
+  esphome-usb:
+    image: ghcr.io/esphome/esphome
+    network_mode: host
+    volumes:
+      - ./config:/config
+      - /dev:/dev
+    privileged: true
+    stdin_open: true
+    tty: true
+    restart: "no"

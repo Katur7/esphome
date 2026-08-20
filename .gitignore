@@ -1,6 +1,9 @@
 config/.esphome/
 config/secrets.yaml
 
+# ESPHome 2026.8+ "Device Builder" local state. The peer-link-key is a secret.
+config/.device-builder*
+
 TODO.txt
 
 test/test_runner*

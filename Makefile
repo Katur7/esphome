@@ -1,7 +1,11 @@
 CONFIG ?= einkframe.yaml
 DEVICE ?=
 DEVICE_FLAG = $(if $(DEVICE),--device $(DEVICE),)
-DOCKER = docker compose run --rm esphome
+
+# USB=1 switches to the privileged service that can see /dev, for flashing a
+# board over USB. Default service has no device access — OTA only.
+SERVICE = $(if $(USB),esphome-usb,esphome)
+DOCKER = docker compose run --rm $(SERVICE)
 
 CXX ?= g++
 CXXFLAGS ?= -std=c++17 -Wall -Wextra -O0 -g
