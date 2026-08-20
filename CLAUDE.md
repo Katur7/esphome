@@ -8,11 +8,15 @@ You are an expert in ESPHome, IoT, and embedded systems. Deep knowledge of ESPHo
 
 ## Project Overview
 
-ESPHome config project for an eInkFrame. See [specs/ARCHITECTURE.md](specs/ARCHITECTURE.md) for full architecture, hardware details, and file structure.
+Monorepo of ESPHome configs for several ESP32 projects, sharing `config/packages/base.package.yaml` for wifi, OTA, API, and logging.
+
+- **einkframe** — mono 7.5" e-paper dashboard. [specs/einkframe/ARCHITECTURE.md](specs/einkframe/ARCHITECTURE.md)
+- **photoframe** — color 7.3" e-paper photo frame. [specs/photoframe/ARCHITECTURE.md](specs/photoframe/ARCHITECTURE.md)
+- **jukebox** — ESP32-C6 + RC522 NFC reader
 
 ## Commands
 
-ESPHome runs via Docker through Make targets:
+ESPHome runs via Docker through Make targets. All default to `CONFIG=einkframe.yaml`.
 
 ```bash
 make compile    # Compile
@@ -22,7 +26,12 @@ make run        # Compile + upload + logs
 make dashboard  # Web dashboard
 make validate   # Validate config
 make clean      # Clean build
+make test       # Native C++ unit tests (einkframe only)
+
+make run CONFIG=photoframe.yaml   # target another project
 ```
+
+`compose.yaml` tracks `ghcr.io/esphome/esphome:latest`, but Docker caches it. photoframe needs ESPHome ≥ 2026.8.0 — if validation fails with confusing schema errors, run `docker compose pull esphome`.
 
 ## Workflow
 
@@ -30,10 +39,10 @@ We use a spec-driven workflow. All specs live in `specs/`.
 
 ### Task Structure
 
-Each task gets a folder under `specs/tasks/`, numbered sequentially:
+Each task gets a folder under `specs/<project>/tasks/`, numbered sequentially:
 
 ```
-specs/tasks/01-project-setup/
+specs/photoframe/tasks/00-project-setup/
   task-plan.md      # Created together, iterated until agreed
   task-summary.md   # Written after completion
 ```
@@ -51,7 +60,7 @@ specs/tasks/01-project-setup/
 ### Summary Phase
 
 - Create `task-summary.md` with actions taken, lessons learned
-- Note if `specs/ARCHITECTURE.md` needs updating (and update it if so)
+- Note if the project's `specs/<project>/ARCHITECTURE.md` needs updating (and update it if so)
 
 ## Tone
 

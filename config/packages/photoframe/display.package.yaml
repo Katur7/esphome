@@ -1,0 +1,107 @@
+# Seeed XIAO ePaper Display Board EE04 + XIAO ESP32-S3 Plus
+# Panel: Waveshare 7.3" Spectra 6 (E6), 800x480, on the 50-pin FPC connector.
+#
+# Pinout is identical to the TRMNL board einkframe runs on — same Seeed driver
+# board family. Battery ADC (GPIO1, gated by GPIO6) and the three user buttons
+# (KEY0=GPIO2, KEY1=GPIO3, KEY2=GPIO5, active low) are unused for now.
+spi:
+  clk_pin: GPIO7
+  mosi_pin: GPIO9
+
+font:
+  - file: "gfonts://Inter"
+    id: font_label
+    size: 28
+
+# --- Image pipeline: disabled during bring-up (task 01) ---
+# Re-enable by uncommenting this block, swapping the display lambda below back
+# to the it.image() version, and restoring on_boot in photoframe.yaml.
+#
+# http_request:
+#   verify_ssl: false
+#   timeout: 30s
+#
+# image:
+#   - platform: online_image
+#     id: photo
+#     url: ${photo_url}
+#     format: PNG
+#     type: RGB565
+#     resize: 800x480
+#     update_interval: never
+#     on_download_finished:
+#       - logger.log: "Photo downloaded, redrawing"
+#       - component.update: epaper
+#     on_error:
+#       - logger.log:
+#           format: "Photo download failed, leaving current image on screen"
+#           level: WARN
+
+display:
+  - platform: epaper_spi
+    id: epaper
+    # Panel-specific model, not the generic Spectra-E6 controller: it carries
+    # the 800x480 dimensions and, importantly, data_rate 20MHz. The generic
+    # model leaves SPI at the 10MHz default.
+    model: 7.3in-Spectra-E6
+    cs_pin: GPIO44
+    dc_pin: GPIO10
+    reset_pin: GPIO38
+    busy_pin:
+      number: GPIO4
+      # E6 busy is active-low. Every Spectra-E6 variant in the ESPHome source
+      # sets inverted + pullup, and Seeed's own EE04 config agrees. With this
+      # wrong the driver never waits, "succeeds" in ~1s, and draws nothing.
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    # Driven manually — a color refresh takes tens of seconds and is the most
+    # expensive thing this device does.
+    update_interval: never
+    # Bring-up test pattern (task 01). Real version is:
+    #   it.fill(Color::WHITE);
+    #   it.image(0, 0, id(photo));
+    lambda: |-
+      it.fill(Color::WHITE);
+
+      // Corner markers — a missing or clipped one means the geometry is wrong.
+      it.filled_rectangle(0, 0, 30, 30, Color::BLACK);
+      it.filled_rectangle(770, 0, 30, 30, Color::BLACK);
+      it.filled_rectangle(0, 450, 30, 30, Color::BLACK);
+      it.filled_rectangle(770, 450, 30, 30, Color::BLACK);
+      it.rectangle(0, 0, 800, 480, Color::BLACK);
+
+      it.print(400, 60, id(font_label), Color::BLACK, TextAlign::CENTER,
+               "photoframe first light");
+
+      // One band per palette colour, in the order we expect them.
+      const Color palette[6] = {
+          Color(0, 0, 0),     Color(255, 255, 255), Color(255, 0, 0),
+          Color(255, 255, 0), Color(0, 0, 255),     Color(0, 255, 0),
+      };
+      const char *names[6] = {"black", "white", "red", "yellow", "blue", "green"};
+
+      for (int i = 0; i < 6; i++) {
+        int x = 40 + i * 120;
+        it.filled_rectangle(x, 130, 110, 220, palette[i]);
+        it.rectangle(x, 130, 110, 220, Color::BLACK);
+        it.print(x + 55, 375, id(font_label), Color::BLACK, TextAlign::CENTER,
+                 names[i]);
+      }
+
+# --- Refresh cadence: disabled during bring-up (task 01) ---
+# script:
+#   - id: refresh_photo
+#     then:
+#       - wait_until:
+#           condition:
+#             wifi.connected:
+#           timeout: 60s
+#       - logger.log: "Fetching photo"
+#       - component.update: photo
+#
+# interval:
+#   - interval: 1h
+#     then:
+#       - script.execute: refresh_photo

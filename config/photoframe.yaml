@@ -1,0 +1,34 @@
+substitutions:
+  board: esp32-s3-devkitc-1
+  framework: esp-idf
+  ap_ssid: "Photoframe"
+  home_assistant_api_encryption_key: !secret photoframe_home_assistant_api_encryption_key
+  ota_password: !secret photoframe_ota_password
+
+  # TODO: point this at whatever serves the pre-rendered 800x480 photo.
+  photo_url: "http://homeassistant.local:8123/local/photoframe/current.png"
+
+esphome:
+  name: photoframe
+  friendly_name: Photoframe
+  on_boot:
+    priority: -100
+    then:
+      # Bring-up (task 01): draw once per boot. Reset button redraws.
+      # Restore to `- script.execute: refresh_photo` with the image pipeline.
+      - logger.log: "Drawing test pattern — a colour refresh takes ~30s"
+      - component.update: epaper
+
+# XIAO ESP32-S3 Plus carries 16MB flash. Merged into base.package.yaml's esp32 block.
+esp32:
+  flash_size: 16MB
+
+# Not optional: the 800x480 6-color frame buffer plus the decoded image
+# do not fit in internal RAM.
+psram:
+  mode: octal
+  speed: 80MHz
+
+packages:
+  - !include packages/base.package.yaml
+  - !include packages/photoframe/display.package.yaml

@@ -14,13 +14,21 @@ Custom C++ helpers (`text_utils`, `einkframe_utils`, `renderer_utils`) are pulle
 
 Full architecture: [specs/einkframe/ARCHITECTURE.md](specs/einkframe/ARCHITECTURE.md).
 
+### Photoframe
+
+Battery-powered 7.3" color e-paper photo frame. Fetches a pre-rendered 800×480 PNG over HTTP and draws it — the device does no photo selection, whatever serves the URL owns that.
+
+Seeed XIAO ePaper Display Board EE04 + XIAO ESP32-S3 Plus, driving a Waveshare 7.3" Spectra 6 panel on the 50-pin connector. Uses the `epaper_spi` component, so it **needs ESPHome ≥ 2026.8.0** — run `docker compose pull esphome` if validation fails with odd schema errors.
+
+Full architecture: [specs/photoframe/ARCHITECTURE.md](specs/photoframe/ARCHITECTURE.md).
+
 ### Jukebox
 
 ESP32-C6 with an RC522 NFC reader. Scans tags and logs them — currently a starting point.
 
 ## Layout
 
-- `config/` — ESPHome YAML entry points (`einkframe.yaml`, `jukebox.yaml`), shared `packages/`, fonts, and `secrets.yaml` (gitignored)
+- `config/` — ESPHome YAML entry points (`einkframe.yaml`, `photoframe.yaml`, `jukebox.yaml`), shared `packages/`, fonts, and `secrets.yaml` (gitignored)
 - `specs/` — architecture docs and per-task plans/summaries
 - `test/` — native doctest suite for the pure-logic C++ helpers
 
@@ -42,11 +50,13 @@ home_assistant_api_encryption_key: "..."
 ota_password: "..."
 jukebox_home_assistant_api_encryption_key: "..."
 jukebox_ota_password: "..."
+photoframe_home_assistant_api_encryption_key: "..."
+photoframe_ota_password: "..."
 ```
 
 ## Commands
 
-All targets default to `CONFIG=einkframe.yaml`. Pass `CONFIG=jukebox.yaml` to target the other one. `DEVICE=...` overrides the upload/log device.
+All targets default to `CONFIG=einkframe.yaml`. Pass `CONFIG=photoframe.yaml` or `CONFIG=jukebox.yaml` to target another project. `DEVICE=...` overrides the upload/log device.
 
 ```bash
 make compile                    # compile
@@ -58,6 +68,7 @@ make dashboard                  # ESPHome web dashboard on :6052
 make clean                      # clean build artifacts
 make test                       # native C++ unit tests (einkframe_utils)
 
+make run CONFIG=photoframe.yaml # build/upload photoframe instead
 make run CONFIG=jukebox.yaml    # build/upload jukebox instead
 make upload DEVICE=/dev/ttyUSB0 # force a specific port
 ```
