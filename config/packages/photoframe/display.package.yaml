@@ -8,34 +8,73 @@ spi:
   clk_pin: GPIO7
   mosi_pin: GPIO9
 
-font:
-  - file: "gfonts://Inter"
-    id: font_label
-    size: 28
+http_request:
+  # Plain HTTP on the LAN — no TLS, so no cert bundle gets pulled in.
+  verify_ssl: false
+  timeout: 30s
 
-# --- Image pipeline: disabled during bring-up (task 01) ---
-# Re-enable by uncommenting this block, swapping the display lambda below back
-# to the it.image() version, and restoring on_boot in photoframe.yaml.
-#
-# http_request:
-#   verify_ssl: false
-#   timeout: 30s
-#
-# image:
-#   - platform: online_image
-#     id: photo
-#     url: ${photo_url}
-#     format: PNG
-#     type: RGB565
-#     resize: 800x480
-#     update_interval: never
-#     on_download_finished:
-#       - logger.log: "Photo downloaded, redrawing"
-#       - component.update: epaper
-#     on_error:
-#       - logger.log:
-#           format: "Photo download failed, leaving current image on screen"
-#           level: WARN
+time:
+  # SNTP, deliberately NOT the homeassistant platform. HA being unreachable is
+  # one of the failure modes last_fetch_ok exists to reveal, so the clock must
+  # not depend on it. Verified on hardware: with the HA platform the device sat
+  # at 1970-01-01 forever because no HA client had adopted it, so utcnow() was
+  # invalid and the timestamp never published.
+  - platform: sntp
+    id: dev_time
+
+image:
+  - platform: online_image
+    id: photo
+    url: ${photo_url}
+    format: PNG
+    # RGB565 costs 768KB of PSRAM for the 480x800 buffer. Rounding to 5/6/5 bits
+    # cannot move any of the six cube-corner colours across colorconv's 128
+    # threshold, so the palette survives exactly; RGB24 would cost 380KB more
+    # and buy nothing the panel's classifier can see.
+    type: RGB565
+    # Deliberately no `resize:` — the server sends exactly 480x800. Resampling
+    # six pure colours would produce intermediate values the panel's classifier
+    # reinterprets rather than approximates.
+    update_interval: never
+    on_download_finished:
+      - lambda: |-
+          // Liveness stamp. Fires on a real download AND on a 304 — which is the
+          // point. A DNS failure and a dead server are the same event from here
+          // and both are silent, so a timestamp that stops moving is the only
+          // signal either one produces.
+          auto t = id(dev_time).utcnow();
+          if (t.is_valid()) {
+            char buf[24];
+            t.strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ");
+            id(last_fetch_ok).publish_state(buf);
+            // text_sensor::publish_state logs at VERBOSE, so log it ourselves —
+            // otherwise there is no way to tell a publish from a silent skip.
+            ESP_LOGI("stamp", "last_fetch_ok = %s", buf);
+          } else {
+            // SNTP needs ~30s after boot. A device that wakes, fetches and sleeps
+            // would therefore never stamp. See the deep-sleep open item.
+            ESP_LOGW("stamp", "clock not synced yet; last_fetch_ok not stamped");
+          }
+      - if:
+          condition:
+            lambda: 'return !cached;'
+          then:
+            - logger.log: "New photo decoded, redrawing"
+            - component.update: epaper
+          else:
+            - logger.log: "Server returned 304; panel already shows this photo"
+    on_error:
+      - logger.log:
+          format: "Photo fetch failed; leaving the previous photo on the panel"
+          level: WARN
+
+text_sensor:
+  - platform: template
+    id: last_fetch_ok
+    name: "Last successful fetch"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
 
 display:
   - platform: epaper_spi
@@ -44,6 +83,12 @@ display:
     # the 800x480 dimensions and, importantly, data_rate 20MHz. The generic
     # model leaves SPI at the 10MHz default.
     model: 7.3in-Spectra-E6
+    # Portrait. Verified on hardware in task 02 step 1: the device logs a
+    # 480x800 drawing surface, and the probe's corner blocks put device origin
+    # at the panel's physical top-right in landscape. So the image is upright
+    # with the panel turned 90 degrees counter-clockwise, which puts the FPC
+    # ribbon on the RIGHT of the finished frame. 270 is the mirror of that.
+    rotation: 90°
     cs_pin: GPIO44
     dc_pin: GPIO10
     reset_pin: GPIO38
@@ -59,49 +104,27 @@ display:
     # Driven manually — a color refresh takes tens of seconds and is the most
     # expensive thing this device does.
     update_interval: never
-    # Bring-up test pattern (task 01). Real version is:
-    #   it.fill(Color::WHITE);
-    #   it.image(0, 0, id(photo));
+    # No inset needed: task 02 step 1 measured the bezel at 0-1 px, so content
+    # runs to the very edge. The pale margin around the image is the panel's
+    # non-addressable border region, not lost pixels.
     lambda: |-
       it.fill(Color::WHITE);
+      it.image(0, 0, id(photo));
 
-      // Corner markers — a missing or clipped one means the geometry is wrong.
-      it.filled_rectangle(0, 0, 30, 30, Color::BLACK);
-      it.filled_rectangle(770, 0, 30, 30, Color::BLACK);
-      it.filled_rectangle(0, 450, 30, 30, Color::BLACK);
-      it.filled_rectangle(770, 450, 30, 30, Color::BLACK);
-      it.rectangle(0, 0, 800, 480, Color::BLACK);
+script:
+  - id: refresh_photo
+    then:
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 60s
+      - logger.log: "Fetching photo"
+      - component.update: photo
 
-      it.print(400, 60, id(font_label), Color::BLACK, TextAlign::CENTER,
-               "photoframe first light");
-
-      // One band per palette colour, in the order we expect them.
-      const Color palette[6] = {
-          Color(0, 0, 0),     Color(255, 255, 255), Color(255, 0, 0),
-          Color(255, 255, 0), Color(0, 0, 255),     Color(0, 255, 0),
-      };
-      const char *names[6] = {"black", "white", "red", "yellow", "blue", "green"};
-
-      for (int i = 0; i < 6; i++) {
-        int x = 40 + i * 120;
-        it.filled_rectangle(x, 130, 110, 220, palette[i]);
-        it.rectangle(x, 130, 110, 220, Color::BLACK);
-        it.print(x + 55, 375, id(font_label), Color::BLACK, TextAlign::CENTER,
-                 names[i]);
-      }
-
-# --- Refresh cadence: disabled during bring-up (task 01) ---
-# script:
-#   - id: refresh_photo
-#     then:
-#       - wait_until:
-#           condition:
-#             wifi.connected:
-#           timeout: 60s
-#       - logger.log: "Fetching photo"
-#       - component.update: photo
-#
-# interval:
-#   - interval: 1h
-#     then:
-#       - script.execute: refresh_photo
+interval:
+  # Placeholder until deep sleep lands. The image cache is RAM-only, so only a
+  # reboot can re-run a decode; these hourly ticks will return 304 until the
+  # server starts rotating daily, which is what keeps last_fetch_ok moving.
+  - interval: 1h
+    then:
+      - script.execute: refresh_photo
