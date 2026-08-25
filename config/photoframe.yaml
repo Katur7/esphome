@@ -15,7 +15,20 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - script.execute: refresh_photo
+      # online_image's own 1h poller does not fire until +1h, so the initial
+      # fetch lives here. Waiting for the clock as well as wifi means the
+      # last_fetch_ok stamp is valid on the very first fetch — SNTP lands
+      # 0-30s after boot and used to race it.
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 60s
+      - wait_until:
+          condition:
+            lambda: 'return id(dev_time).utcnow().is_valid();'
+          timeout: 60s
+      - logger.log: "Fetching photo"
+      - component.update: photo
 
 # XIAO ESP32-S3 Plus carries 16MB flash. Merged into base.package.yaml's esp32 block.
 esp32:
@@ -30,3 +43,4 @@ psram:
 packages:
   - !include packages/base.package.yaml
   - !include packages/photoframe/display.package.yaml
+  - !include packages/photoframe/photo.package.yaml

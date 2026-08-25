@@ -4,145 +4,37 @@
 # Pinout is identical to the TRMNL board einkframe runs on — same Seeed driver
 # board family. Battery ADC (GPIO1, gated by GPIO6) and the three user buttons
 # (KEY0=GPIO2, KEY1=GPIO3, KEY2=GPIO5, active low) are unused for now.
+#
+# Rationale for the non-obvious settings here lives in
+# specs/photoframe/ARCHITECTURE.md § How It Fits Together.
 spi:
   clk_pin: GPIO7
   mosi_pin: GPIO9
 
-http_request:
-  # Plain HTTP on the LAN — no TLS, so no cert bundle gets pulled in.
-  verify_ssl: false
-  # 10s, not 30s: a real fetch takes ~2.7s, so this is ~4x margin while still
-  # failing fast. Under deep sleep every second of a doomed request is radio-on
-  # time added to the wake.
-  timeout: 10s
-  # MANDATORY, not tuning. The IDF request blocks the main loop, and the ESP32
-  # task watchdog panics at 5s — so with this unset an unreachable server
-  # reboot-loops the device instead of failing gracefully, and on_error never
-  # runs. Verified: 6 fetch attempts, 6 watchdog panics, 6 reboots, heading for
-  # safe mode. http_request wraps the request in a WatchdogManager, but it is a
-  # no-op while watchdog_timeout is 0, which is the default. Keep this above
-  # `timeout` so the request always gives up before the watchdog can fire.
-  watchdog_timeout: 20s
-
-time:
-  # SNTP, deliberately NOT the homeassistant platform. HA being unreachable is
-  # one of the failure modes last_fetch_ok exists to reveal, so the clock must
-  # not depend on it. Verified on hardware: with the HA platform the device sat
-  # at 1970-01-01 forever because no HA client had adopted it, so utcnow() was
-  # invalid and the timestamp never published.
-  - platform: sntp
-    id: dev_time
-    # Explicit, matching einkframe. Without it ESPHome calls tzlocal at *compile*
-    # time, and the build runs in the esphome container where TZ is UTC — so UTC
-    # gets baked into the binary. Harmless for last_fetch_ok, which is stamped in
-    # UTC with a Z suffix on purpose, but deep sleep has to wake on a local-time
-    # schedule and Stockholm has DST, so a UTC device would drift an hour twice
-    # a year.
-    timezone: "Europe/Stockholm"
-
-image:
-  - platform: online_image
-    id: photo
-    url: ${photo_url}
-    format: PNG
-    # RGB565 costs 768KB of PSRAM for the 480x800 buffer. Rounding to 5/6/5 bits
-    # cannot move any of the six cube-corner colours across colorconv's 128
-    # threshold, so the palette survives exactly; RGB24 would cost 380KB more
-    # and buy nothing the panel's classifier can see.
-    type: RGB565
-    # Deliberately no `resize:` — the server sends exactly 480x800. Resampling
-    # six pure colours would produce intermediate values the panel's classifier
-    # reinterprets rather than approximates.
-    update_interval: never
-    on_download_finished:
-      - lambda: |-
-          // Liveness stamp. Fires on a real download AND on a 304 — which is the
-          // point. A DNS failure and a dead server are the same event from here
-          // and both are silent, so a timestamp that stops moving is the only
-          // signal either one produces.
-          auto t = id(dev_time).utcnow();
-          if (t.is_valid()) {
-            char buf[24];
-            t.strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ");
-            id(last_fetch_ok).publish_state(buf);
-            // text_sensor::publish_state logs at VERBOSE, so log it ourselves —
-            // otherwise there is no way to tell a publish from a silent skip.
-            ESP_LOGI("stamp", "last_fetch_ok = %s", buf);
-          } else {
-            // SNTP needs ~30s after boot. A device that wakes, fetches and sleeps
-            // would therefore never stamp. See the deep-sleep open item.
-            ESP_LOGW("stamp", "clock not synced yet; last_fetch_ok not stamped");
-          }
-      - if:
-          condition:
-            lambda: 'return !cached;'
-          then:
-            - logger.log: "New photo decoded, redrawing"
-            - component.update: epaper
-          else:
-            - logger.log: "Server returned 304; panel already shows this photo"
-    on_error:
-      - logger.log:
-          format: "Photo fetch failed; leaving the previous photo on the panel"
-          level: WARN
-
-text_sensor:
-  - platform: template
-    id: last_fetch_ok
-    name: "Last successful fetch"
-    device_class: timestamp
-    entity_category: diagnostic
-    update_interval: never
-
 display:
   - platform: epaper_spi
     id: epaper
-    # Panel-specific model, not the generic Spectra-E6 controller: it carries
-    # the 800x480 dimensions and, importantly, data_rate 20MHz. The generic
-    # model leaves SPI at the 10MHz default.
+    # Panel-specific model, not the generic Spectra-E6: it carries the 800x480
+    # dimensions and data_rate 20MHz.
     model: 7.3in-Spectra-E6
-    # Portrait. Verified on hardware in task 02 step 1: the device logs a
-    # 480x800 drawing surface, and the probe's corner blocks put device origin
-    # at the panel's physical top-right in landscape. So the image is upright
-    # with the panel turned 90 degrees counter-clockwise, which puts the FPC
-    # ribbon on the RIGHT of the finished frame. 270 is the mirror of that.
+    # Portrait, 480x800. Puts the FPC ribbon on the RIGHT of the finished frame;
+    # 270 is the mirror.
     rotation: 90°
     cs_pin: GPIO44
     dc_pin: GPIO10
     reset_pin: GPIO38
     busy_pin:
       number: GPIO4
-      # E6 busy is active-low. Every Spectra-E6 variant in the ESPHome source
-      # sets inverted + pullup, and Seeed's own EE04 config agrees. With this
-      # wrong the driver never waits, "succeeds" in ~1s, and draws nothing.
+      # E6 busy is active-low. Wrong, and the driver never waits, "succeeds" in
+      # ~1s, and draws nothing.
       inverted: true
       mode:
         input: true
         pullup: true
-    # Driven manually — a color refresh takes tens of seconds and is the most
-    # expensive thing this device does.
+    # Driven manually from on_download_finished — a colour refresh takes ~30s
+    # and is the most expensive thing this device does.
     update_interval: never
-    # No inset needed: task 02 step 1 measured the bezel at 0-1 px, so content
-    # runs to the very edge. The pale margin around the image is the panel's
-    # non-addressable border region, not lost pixels.
+    # No inset: the bezel measures 0-1 px, so content runs to the very edge.
     lambda: |-
       it.fill(Color::WHITE);
       it.image(0, 0, id(photo));
-
-script:
-  - id: refresh_photo
-    then:
-      - wait_until:
-          condition:
-            wifi.connected:
-          timeout: 60s
-      - logger.log: "Fetching photo"
-      - component.update: photo
-
-interval:
-  # Placeholder until deep sleep lands. The image cache is RAM-only, so only a
-  # reboot can re-run a decode; these hourly ticks will return 304 until the
-  # server starts rotating daily, which is what keeps last_fetch_ok moving.
-  - interval: 1h
-    then:
-      - script.execute: refresh_photo

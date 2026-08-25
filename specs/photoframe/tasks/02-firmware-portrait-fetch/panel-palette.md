@@ -4,9 +4,10 @@ Step 0 of task 02. These are the six primaries this panel actually produces, mea
 off the task 01 bring-up test pattern. They are the working palette the server's dither
 needs; without them the dither is aiming at idealised colours the panel cannot make.
 
-Measured 2026-08-25. Source frames: `PXL_20260825_064535775.RAW-02.ORIGINAL.dng`
-(primary, tilted) and `PXL_20260825_064457857.RAW-02.ORIGINAL.dng` (cross-check,
-straight above).
+Measured 2026-08-25 from two camera RAWs — `PXL_20260825_064535775` (primary, tilted) and
+`PXL_20260825_064457857` (cross-check, straight above). **The RAWs are not retained**;
+they were ~20 MB each and the numbers below are the deliverable. Re-measuring means
+re-shooting, so the method section is written to be repeatable.
 
 ## The palette
 

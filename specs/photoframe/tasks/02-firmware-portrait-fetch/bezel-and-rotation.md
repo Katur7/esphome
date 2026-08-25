@@ -3,8 +3,8 @@
 Step 1 of task 02. Answers two questions the config could not: how much of the drawing
 surface disappears under the bezel, and which way round `rotation: 90°` actually lands.
 
-Measured 2026-08-25 from `PXL_20260825_070426623.RAW-02.ORIGINAL.dng` (kept out of git;
-`bezel-probe.jpg` is the preview).
+Measured 2026-08-25 from camera RAW `PXL_20260825_070426623`, which is not retained.
+`bezel-probe.jpg` is the preview and is in git.
 
 ## Findings
 
@@ -25,10 +25,13 @@ this controller family. The models that do expose a border waveform option (`ssd
 mean patching the component.
 
 **`rotation: 90°` is correct, and the frame must be built with the cable on the right.**
-The device reports `drawing surface is 480x800` at boot, and the probe's corner blocks
-put device origin at the panel's physical **top-right** in landscape. So the image is
-upright when the panel is turned 90° counter-clockwise from landscape, which puts the
-FPC ribbon and driver board on the **right-hand** side of the portrait frame.
+The device reports `drawing surface is 480x800` at boot, and each corner block's
+*colour* identifies which device corner it is, putting device origin at the panel's
+physical **top-right** in landscape. Note this uses only which colour appears in which
+photographed corner — not the block geometry, which the localisation attempt below shows
+is unusable. Colour identity survives blur and perspective; centroids did not. So the
+image is upright when the panel is turned 90° counter-clockwise from landscape, which
+puts the FPC ribbon and driver board on the **right-hand** side of the portrait frame.
 `rotation: 270°` is the mirror of that, with the cable on the left.
 
 ## Method, and the two things that went wrong

@@ -8,7 +8,3 @@ TODO.txt
 
 test/test_runner*
 .DS_Store
-# Camera RAWs and full-size phone JPEGs from panel measurement.
-# Large binaries; the derived numbers in panel-palette.md are the deliverable.
-*.dng
-PXL_*.jpg

@@ -1,0 +1,63 @@
+# Photo fetch: HTTP, clock, the decoded image, and the liveness sensor.
+# Rationale for the non-obvious settings here lives in
+# specs/photoframe/ARCHITECTURE.md § How It Fits Together.
+
+http_request:
+  # Plain HTTP on the LAN, so no cert bundle gets pulled in.
+  verify_ssl: false
+  # A real fetch is ~2.7s; 10s is ~4x margin and still fails fast.
+  timeout: 10s
+  # Mandatory, not tuning: unset, an unreachable server reboot-loops the device.
+  # Must stay above `timeout`.
+  watchdog_timeout: 20s
+
+time:
+  # SNTP, deliberately not the homeassistant platform: HA being unreachable is
+  # one of the failure modes last_fetch_ok exists to reveal.
+  - platform: sntp
+    id: dev_time
+    # Explicit, matching einkframe. Unset, ESPHome bakes in the build
+    # container's UTC at compile time.
+    timezone: "Europe/Stockholm"
+
+image:
+  - platform: online_image
+    id: photo
+    url: ${photo_url}
+    format: PNG
+    # 768KB of PSRAM. 5/6/5 rounding cannot move any of the six cube-corner
+    # colours across colorconv's 128 threshold, so the palette survives exactly.
+    type: RGB565
+    # No `resize:` — the server sends exactly 480x800.
+    #
+    # Placeholder cadence until deep sleep lands. First tick is at +1h, not at
+    # boot, so on_boot in photoframe.yaml owns the initial fetch.
+    update_interval: 1h
+    on_download_finished:
+      # Stamped on a real download AND on a 304 — that is the point. A DNS
+      # failure and a dead server are the same silent event from here, so a
+      # timestamp that stops moving is the only signal either one produces.
+      # UTC with a Z suffix so HA reads it as an absolute instant.
+      - text_sensor.template.publish:
+          id: last_fetch_ok
+          state: !lambda 'return id(dev_time).utcnow().strftime("%Y-%m-%dT%H:%M:%SZ");'
+      - if:
+          condition:
+            lambda: 'return !cached;'
+          then:
+            - logger.log: "New photo decoded, redrawing"
+            - component.update: epaper
+          else:
+            - logger.log: "Server returned 304; panel already shows this photo"
+    on_error:
+      - logger.log:
+          format: "Photo fetch failed; leaving the previous photo on the panel"
+          level: WARN
+
+text_sensor:
+  - platform: template
+    id: last_fetch_ok
+    name: "Last successful fetch"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
