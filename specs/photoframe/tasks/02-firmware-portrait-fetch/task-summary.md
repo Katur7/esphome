@@ -76,12 +76,30 @@ indexed PNG is not needed.** It existed only as a fallback in case RGB565 would 
   a briefly-set error flag). Cosmetic, but it is the steady state once the photo stops
   changing, so it will be misread as a fault by anyone reading these logs later.
 
-## Not done
+## The failure test found a real bug
 
-- **Failure test not run.** Needs the server container on the Pi stopped, which I cannot
-  do from here. The code path is reachable only from `on_download_finished`, so the panel
-  physically cannot be cleared by a failed fetch — but that is reasoning, not a
-  measurement, and task 01's lesson was that silent failures do not announce themselves.
+Run with the server genuinely stopped, and it was worth doing: **an unreachable server
+reboot-looped the device.** 6 fetch attempts, 6 task-watchdog panics, 6 reboots, safe mode
+counting down, and `on_error` never reached — the watchdog fires at 5s, long before the
+30s HTTP timeout would have failed gracefully.
+
+Cause: the IDF `http_request` blocks the main loop during connect. It wraps the request in
+a `WatchdogManager`, but `watchdog_timeout_` defaults to `0` and `WatchdogManager` returns
+early on zero, so the protection is inert unless configured. Fixed with
+`watchdog_timeout: 20s` and `timeout: 10s` — the watchdog ceiling must sit above the
+request timeout or the watchdog wins the race again.
+
+Verified after the fix: 3 consecutive failures at exactly 10.03s each, `on_error` firing,
+`last_fetch_ok` correctly frozen, **0 reboots, 0 redraws** — the photo stayed on the panel
+and no error was ever drawn.
+
+My pre-test reasoning — that the panel was safe because `component.update: epaper` is only
+reachable from `on_download_finished` — was right about the panel and completely blind to
+the device crash-looping. **That is the whole argument for measuring failure paths rather
+than reasoning about them**, and it is the second time in this project that a silent
+failure did not announce itself.
+
+## Not done
 - **HA reporting unverified end to end.** The device publishes `last_fetch_ok` but has
   never been adopted in Home Assistant, so nothing is receiving it. HA itself is up.
 - **Scheduled redraw unverified.** With a fixed `current.png`, the only path that runs

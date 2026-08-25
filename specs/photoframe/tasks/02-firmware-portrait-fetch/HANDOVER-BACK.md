@@ -75,6 +75,20 @@ Three consequences for the dither, in priority order:
 Full method and uncertainties in `panel-palette.md`; the bezel and rotation method in
 `bezel-and-rotation.md`.
 
+## A device-side bug your outage would have exposed
+
+Worth knowing because it changes what a server outage looks like from your side. Until
+this task, **an unreachable server reboot-looped the device** — the IDF HTTP request blocks
+the main loop and the ESP32 task watchdog panicked at 5s, before the request could fail
+gracefully. Fixed on the device with `watchdog_timeout: 20s`.
+
+The relevant consequence for you: the outage was a connection **timeout**, not a refusal,
+because the container was stopped rather than the port closed. The device therefore blocks
+for its full request timeout on every attempt. That is now 10s, down from 30s. If you can
+make an outage fail fast — anything that answers instead of dropping packets — the device
+spends correspondingly less time awake with the radio on, which matters directly once it
+runs on battery.
+
 ## Server-side things worth knowing
 
 - **Everything the server guarantees was verified independently** before any firmware was
@@ -87,6 +101,10 @@ Full method and uncertainties in `panel-palette.md`; the bezel and rotation meth
 - **304 works end to end.** Confirmed over repeated ticks: the device fetches, gets 304,
   allocates nothing, and does not redraw the panel. Keep serving 304s — each one avoided
   saves a 30 s refresh, which is the device's single largest power cost.
+- **A failed fetch leaves the panel alone, verified.** Server stopped, three consecutive
+  failed attempts: `on_error` fires, the panel keeps the previous photo, nothing is drawn,
+  and `last_fetch_ok` freezes. So an outage on your side degrades to a stale photo and a
+  stalled timestamp, never to a blank or error screen.
 - **Nothing on the device needs the photo to change to prove liveness.** The device
   reports a `last_fetch_ok` timestamp that advances on 304s too, so a stalled server and
   an unrotated photo are distinguishable from the HA side.

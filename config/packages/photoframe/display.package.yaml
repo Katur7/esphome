@@ -11,7 +11,18 @@ spi:
 http_request:
   # Plain HTTP on the LAN — no TLS, so no cert bundle gets pulled in.
   verify_ssl: false
-  timeout: 30s
+  # 10s, not 30s: a real fetch takes ~2.7s, so this is ~4x margin while still
+  # failing fast. Under deep sleep every second of a doomed request is radio-on
+  # time added to the wake.
+  timeout: 10s
+  # MANDATORY, not tuning. The IDF request blocks the main loop, and the ESP32
+  # task watchdog panics at 5s — so with this unset an unreachable server
+  # reboot-loops the device instead of failing gracefully, and on_error never
+  # runs. Verified: 6 fetch attempts, 6 watchdog panics, 6 reboots, heading for
+  # safe mode. http_request wraps the request in a WatchdogManager, but it is a
+  # no-op while watchdog_timeout is 0, which is the default. Keep this above
+  # `timeout` so the request always gives up before the watchdog can fire.
+  watchdog_timeout: 20s
 
 time:
   # SNTP, deliberately NOT the homeassistant platform. HA being unreachable is
@@ -21,6 +32,13 @@ time:
   # invalid and the timestamp never published.
   - platform: sntp
     id: dev_time
+    # Explicit, matching einkframe. Without it ESPHome calls tzlocal at *compile*
+    # time, and the build runs in the esphome container where TZ is UTC — so UTC
+    # gets baked into the binary. Harmless for last_fetch_ok, which is stamped in
+    # UTC with a Z suffix on purpose, but deep sleep has to wake on a local-time
+    # schedule and Stockholm has DST, so a UTC device would drift an hour twice
+    # a year.
+    timezone: "Europe/Stockholm"
 
 image:
   - platform: online_image
