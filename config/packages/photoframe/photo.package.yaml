@@ -20,6 +20,12 @@ time:
     # container's UTC at compile time.
     timezone: "Europe/Stockholm"
 
+globals:
+  - id: force_redraw
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
 image:
   - platform: online_image
     id: photo
@@ -43,13 +49,21 @@ image:
           state: !lambda 'return id(dev_time).utcnow().strftime("%Y-%m-%dT%H:%M:%SZ");'
       - if:
           condition:
-            lambda: 'return !cached;'
+            lambda: 'return !cached || id(force_redraw);'
           then:
-            - logger.log: "New photo decoded, redrawing"
+            - if:
+                condition:
+                  lambda: 'return id(force_redraw) && cached;'
+                then:
+                  - logger.log: "Server returned 304, but forced redraw requested; redrawing display"
+                else:
+                  - logger.log: "New photo decoded, redrawing"
+            - lambda: 'id(force_redraw) = false;'
             - component.update: epaper
           else:
             - logger.log: "Server returned 304; panel already shows this photo"
     on_error:
+      - lambda: 'id(force_redraw) = false;'
       - logger.log:
           format: "Photo fetch failed; leaving the previous photo on the panel"
           level: WARN

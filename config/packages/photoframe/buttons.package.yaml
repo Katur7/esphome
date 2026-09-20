@@ -1,0 +1,22 @@
+# Driver board user buttons on Seeed XIAO ePaper Display Board EE04:
+# KEY0 = GPIO2, KEY1 = GPIO3, KEY2 = GPIO5 (all active low with pullup).
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO3
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+      ignore_strapping_warning: true
+    name: "Key 1"
+    id: key1
+    filters:
+      - delayed_on_off: 50ms
+    on_press:
+      then:
+        - logger.log: "KEY1 pressed: fetching photo and redrawing"
+        - lambda: 'id(force_redraw) = true;'
+        - component.update: photo
+

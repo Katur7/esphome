@@ -44,3 +44,4 @@ packages:
   - !include packages/base.package.yaml
   - !include packages/photoframe/display.package.yaml
   - !include packages/photoframe/photo.package.yaml
+  - !include packages/photoframe/buttons.package.yaml

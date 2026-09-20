@@ -2,8 +2,8 @@
 # Panel: Waveshare 7.3" Spectra 6 (E6), 800x480, on the 50-pin FPC connector.
 #
 # Pinout is identical to the TRMNL board einkframe runs on — same Seeed driver
-# board family. Battery ADC (GPIO1, gated by GPIO6) and the three user buttons
-# (KEY0=GPIO2, KEY1=GPIO3, KEY2=GPIO5, active low) are unused for now.
+# board family. Battery ADC (GPIO1, gated by GPIO6) and buttons KEY0/KEY2
+# (GPIO2, GPIO5) are unused for now; KEY1 (GPIO3) triggers refresh & redraw.
 #
 # Rationale for the non-obvious settings here lives in
 # specs/photoframe/ARCHITECTURE.md § How It Fits Together.

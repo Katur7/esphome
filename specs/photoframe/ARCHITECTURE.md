@@ -17,6 +17,7 @@ config/
   packages/
     base.package.yaml                 # Shared: wifi, OTA, API, logging
     photoframe/
+      buttons.package.yaml            # KEY1 user button (refresh & redraw)
       display.package.yaml            # SPI + epaper_spi
       photo.package.yaml              # http_request, sntp, online_image,
                                       # last_fetch_ok sensor
@@ -45,7 +46,7 @@ Identical to the TRMNL board einkframe runs on — same Seeed driver-board famil
 | Battery ADC | GPIO1 (gated by GPIO6) |
 | KEY0 / KEY1 / KEY2 | GPIO2 / GPIO3 / GPIO5, active low |
 
-Battery ADC and the three buttons are wired but unused so far.
+Battery ADC and KEY0/KEY2 are wired but unused so far. KEY1 (GPIO3) triggers photo fetch & redraw.
 
 ## How It Fits Together
 
