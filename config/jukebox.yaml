@@ -3,7 +3,6 @@ substitutions:
   framework: esp-idf
   ap_ssid: "Jukebox"
   home_assistant_api_encryption_key: !secret jukebox_home_assistant_api_encryption_key
-  ota_password: !secret jukebox_ota_password
 
 esphome:
   name: jukebox

@@ -3,7 +3,6 @@ substitutions:
   framework: arduino
   ap_ssid: "eInkFrame"
   home_assistant_api_encryption_key: !secret home_assistant_api_encryption_key
-  ota_password: !secret ota_password
 
 esphome:
   name: einkframe

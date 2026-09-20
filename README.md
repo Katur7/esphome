@@ -47,11 +47,8 @@ wifi_ssid: "..."
 wifi_password: "..."
 ap_password: "..."
 home_assistant_api_encryption_key: "..."
-ota_password: "..."
 jukebox_home_assistant_api_encryption_key: "..."
-jukebox_ota_password: "..."
 photoframe_home_assistant_api_encryption_key: "..."
-photoframe_ota_password: "..."
 photoframe_photo_url: "http://host:port/current.png"
 ```
 

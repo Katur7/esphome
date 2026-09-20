@@ -3,7 +3,6 @@ substitutions:
   framework: esp-idf
   ap_ssid: "Photoframe"
   home_assistant_api_encryption_key: !secret photoframe_home_assistant_api_encryption_key
-  ota_password: !secret photoframe_ota_password
 
   # Kept in secrets.yaml: this repo is public and the URL carries an internal
   # hostname. It also makes swapping the name for the bare IP a non-commit.
